@@ -1,0 +1,7 @@
+<div id="otp-field" style="display:none;">
+    <form method="POST" action="{% url 'send_otp' %}">
+        {% csrf_token %}
+        <input class="input mb-3" type="text" name="phone_number" placeholder="Enter Your Phone Number" required>
+        <button type="submit" class="newsletter-btn">Send OTP</button>
+    </form>
+</div>

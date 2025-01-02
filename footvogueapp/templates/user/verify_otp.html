@@ -1,0 +1,30 @@
+<!-- In verify_otp.html -->
+{% extends "home.html" %}
+
+{% block content %}
+<div id="otp-verify" class="section">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="newsletter">
+                    <p>Verify OTP for <strong>Foot Vogue</strong></p>
+                    <form method="post" action="{% url 'verify_otp' %}">
+                        {% csrf_token %}
+                        <input class="input mb-3" type="text" name="otp" placeholder="Enter OTP" required>
+                        <input type="hidden" name="phone_number" value="{{ phone_number }}">
+                        <button class="newsletter-btn"><i class="fa fa-check"></i> Verify OTP</button>
+                    </form>
+
+                    {% if messages %}
+                    <div class="mt-3">
+                        {% for message in messages %}
+                        <p style="color: red;">{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
