@@ -1,0 +1,157 @@
+{% extends "admin/admin_dash.html" %}
+{% load static %}
+{% block content %}
+<!-- View Products Page -->
+<div class="container">
+    <!-- Search Bar and Add Product Button -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <input
+                type="text"
+                id="search-bar"
+                class="form-control"
+                placeholder="Search for products..."
+                onkeyup="filterProducts()"
+            >
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'add_product' %}" class="btn btn-danger rounded">Add Product</a>
+        </div>
+    </div>
+
+    <!-- Admin Added Products -->
+    <div class="row">
+        <div class="section-title">
+            <h3 class="title">Your Products</h3>
+        </div>
+        <div class="products-tabs">
+            <div id="admin-products" class="tab-pane active">
+                <div class="products-slick" data-nav="#slick-nav-admin">
+                    {% for product in products %}
+                    <!-- Admin Product -->
+                    <div class="product">
+                        <div class="product-img">
+                            <!-- Check if product has images -->
+                            {% if product.productvariant_set.first.productimage_set.first %}
+                                <img 
+                                    src="{{ product.productvariant_set.first.productimage_set.first.image_url.url }}" 
+                                    alt="{{ product.name }}"
+                                    style="max-width: 200px; max-height: 200px;"
+                                >
+                            {% else %}
+                                <img 
+                                    src="{% static 'images/placeholder.jpg' %}" 
+                                    alt="No image available"
+                                    style="max-width: 200px; max-height: 200px;"
+                                >
+                            {% endif %}
+                        </div>
+                        <div class="product-body">
+                            <!-- Product Category -->
+                            <p class="product-category">
+                                {% if product.category %}
+                                    {{ product.category.id }}: {{ product.category.category_name }}
+                                {% else %}
+                                    No category
+                                {% endif %}
+                            </p>
+                            <!-- Product Name -->
+                            <h3 class="product-name"><a href="#">{{ product.name }}</a></h3>
+                            <!-- Product Price -->
+                            <h4 class="product-price">${{ product.productvariant_set.first.price }}
+                                {% if product.old_price %}
+                                <del class="product-old-price">${{ product.old_price }}</del>
+                                {% endif %}
+                            </h4>
+                            <!-- Product Rating -->
+                            <div class="product-rating">
+                                {% for i in product.rating %}
+                                <i class="fa fa-star"></i>
+                                {% endfor %}
+                            </div>
+                            <!-- Product Buttons -->
+                            <!-- <div class="product-btns">
+                                <button class="add-to-wishlist"><i class="fa fa-heart-o"></i><span class="tooltipp">add to wishlist</span></button>
+                                <button class="add-to-compare"><i class="fa fa-exchange"></i><span class="tooltipp">add to compare</span></button>
+                                <button class="quick-view"><i class="fa fa-eye"></i><span class="tooltipp">quick view</span></button>
+                            </div> -->
+                        </div>
+                        <div class="add-to-cart">
+                            <!-- Edit button added -->
+                            <a href="{% url 'edit_product' product.id %}" class="btn btn-warning rounded">Edit</a>
+                            <a href="{% url 'delete_product' product.id %}" class="btn btn-danger rounded" onclick="return confirm('Are you sure you want to delete this product?')">Delete</a>
+                        </div>
+                    </div>
+                    <!-- /Admin Product -->
+                    {% empty %}
+                    <p>No products added yet.</p>
+                    {% endfor %}
+                </div>
+                <div id="slick-nav-admin" class="products-slick-nav"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dummy Products -->
+    <div class="row mt-5">
+        <div class="section-title">
+            <h3 class="title">Demo Products</h3>
+        </div>
+        <div class="products-tabs">
+            <div id="tab2" class="tab-pane active">
+                <div class="products-slick" data-nav="#slick-nav-2">
+                    <!-- Dummy Product -->
+                    <div class="product">
+                        <div class="product-img">
+                            <img src="{% static 'img/product06.jpg' %}" alt="" class="img-fluid">
+                            <div class="product-label">
+                                <span class="sale">-30%</span>
+                                <span class="new">NEW</span>
+                            </div>
+                        </div>
+                        <div class="product-body">
+                            <p class="product-category">Category</p>
+                            <h3 class="product-name"><a href="#">Product name goes here</a></h3>
+                            <h4 class="product-price">$980.00 <del class="product-old-price">$990.00</del></h4>
+                            <div class="product-rating">
+                                <i class="fa fa-star"></i>
+                                <i class="fa fa-star"></i>
+                                <i class="fa fa-star"></i>
+                                <i class="fa fa-star"></i>
+                                <i class="fa fa-star"></i>
+                            </div>
+                            <!-- <div class="product-btns">
+                                <button class="add-to-wishlist"><i class="fa fa-heart-o"></i><span class="tooltipp">add to wishlist</span></button>
+                                <button class="add-to-compare"><i class="fa fa-exchange"></i><span class="tooltipp">add to compare</span></button>
+                                <button class="quick-view"><i class="fa fa-eye"></i><span class="tooltipp">quick view</span></button>
+                            </div> -->
+                        </div>
+                        <!-- <div class="add-to-cart">
+                            <button class="add-to-cart-btn"><i class="fa fa-shopping-cart"></i> add to cart</button>
+                        </div> -->
+                    </div>
+                    <!-- /Dummy Product -->
+                </div>
+                <div id="slick-nav-2" class="products-slick-nav"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- /View Products Page -->
+
+<script>
+    // Function to filter products based on search input
+    function filterProducts() {
+        let input = document.getElementById("search-bar").value.toLowerCase();
+        let products = document.querySelectorAll(".product");
+        products.forEach(product => {
+            let name = product.querySelector(".product-name a").textContent.toLowerCase();
+            if (name.includes(input)) {
+                product.style.display = "block";
+            } else {
+                product.style.display = "none";
+            }
+        });
+    }
+</script>
+{% endblock %}

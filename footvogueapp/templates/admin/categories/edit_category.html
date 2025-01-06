@@ -1,0 +1,45 @@
+{% extends "admin/admin_dash.html" %}
+{% load static %}
+{% block content %}
+
+<div class="container my-5" style="min-height: 80vh;"> <!-- Ensure the content height is large enough to push footer down -->
+    <!-- Heading -->
+    <h2 class="text-center mb-4">Edit Category</h2>
+
+    <!-- Category Add Form -->
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <form method="post" class="p-4 border rounded shadow-sm bg-light">
+                {% csrf_token %}
+                
+                <!-- Category Name -->
+                <div class="form-group mb-3">
+                    <label for="category_name">Category Name</label>
+                    <input class="form-control" type="text" id="category_name" name="category_name" placeholder="Enter category name" required>
+                </div>
+
+               <!-- Parent Category (Dropdown) -->
+                <div class="form-group mb-3">
+                    <label for="parent_category">Parent Category</label>
+                    <select class="form-control" id="parent_category" name="parent_category">
+                        <option value="">Select Parent Category</option>
+                        <option value="">women</option>
+                        <option value="">men</option>
+                        <option value="">kids</option>
+                        {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.category_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+
+                <!-- Submit Button -->
+                <div class="form-group text-center">
+                    <button type="submit" class="btn btn-danger btn-block">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
