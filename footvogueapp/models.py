@@ -1,7 +1,7 @@
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-
+from PIL import Image
 import random
 import string
 from django.utils import timezone
@@ -39,3 +39,62 @@ class OTP(models.Model):
 
     def __str__(self):
         return f"OTP for {self.user.username} ({self.phone_number})"
+
+#### admin models ###
+
+class Category(models.Model):
+    category_name = models.CharField(max_length=255, unique=True)
+    parent_category = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subcategories'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        self.category_name = self.category_name.lower()  # Convert to lowercase before saving
+        super().save(*args, **kwargs)
+
+class Product(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField()
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
+class ProductImage(models.Model):
+    variant = models.ForeignKey('ProductVariant', on_delete=models.CASCADE)
+    image_url = models.ImageField(upload_to='product_images/')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        img = Image.open(self.image_url.path)
+        if img.height > 600 or img.width > 600:
+            img = img.resize((600, 600), Image.Resampling.LANCZOS) 
+            img.save(self.image_url.path)
+
+
+class ProductVariant(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    color = models.ForeignKey('ProductColor', on_delete=models.CASCADE)
+    size = models.ForeignKey('ProductSize', on_delete=models.CASCADE)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    stock_quantity = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class ProductColor(models.Model):
+    color_name = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class ProductSize(models.Model):
+    size_name = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
