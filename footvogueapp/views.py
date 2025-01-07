@@ -18,6 +18,10 @@ from django.core.paginator import Paginator
 
 from django.db.models import Avg
 
+from django.shortcuts import render, get_object_or_404
+from .models import Product, Rating, Review, Category
+from django.core.paginator import Paginator
+from django.db.models import Avg
 def product_details(request, product_id, variant_id=None):
     # Fetch the product and ensure it's not deleted
     product = get_object_or_404(Product, id=product_id, is_deleted=False)
@@ -55,6 +59,15 @@ def product_details(request, product_id, variant_id=None):
     for review in reviews_page:
         review.rating_value = Rating.objects.filter(user=review.user, product=product).first().rating if Rating.objects.filter(user=review.user, product=product).exists() else 0
 
+    # Get related products
+    related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]  # Adjust the number of related products as needed
+
+    # Calculate avg_rating for related products
+    for related_product in related_products:
+        ratings = Rating.objects.filter(product=related_product)
+        total_ratings = ratings.count()
+        related_product.avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
+
     # Pass the necessary values to the template
     context = {
         'product': product,
@@ -66,9 +79,11 @@ def product_details(request, product_id, variant_id=None):
         'empty_stars_range': empty_stars_range,
         'rating_breakdown': [{'rating': i, 'percentage': 20} for i in range(1, 6)],  # Placeholder data
         'reviews': reviews_page,  # Paginated reviews
+        'related_products': related_products  # Pass related products with avg_rating
     }
 
     return render(request, 'user/product_details.html', context)
+
 
 
 @login_required(login_url='login')
