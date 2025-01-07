@@ -4,13 +4,17 @@ from . import views
 
 
 urlpatterns = [
-    path('',views.login_view, name='login'),
-    path('home/',views.home, name='home'),
+    path('',views.home, name='home'),
+    path('login/',views.login_view, name='login'),
     path('register/',views.register_view, name='register'),
     path('logout/', views.logout_view, name='logout'),
     path('send-otp/', views.send_otp, name='send_otp'),
     path('verify-otp/', views.verify_otp, name='verify_otp'),
+    # URLs for product details and variant details
     path('product/<int:product_id>/', views.product_details, name='product_details'),
+    path('product/<int:product_id>/variant/<int:variant_id>/', views.product_details, name='product_details_variant'),
+    path('product/<int:product_id>/submit_review_and_rating/', views.submit_review_and_rating, name='submit_review_and_rating'),
+
     
     
     ### admin urls ####

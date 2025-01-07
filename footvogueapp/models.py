@@ -5,6 +5,7 @@ from PIL import Image
 import random
 import string
 from django.utils import timezone
+from django.conf import settings
 
 class CustomUser(AbstractUser):
     # Additional fields
@@ -98,3 +99,24 @@ class ProductSize(models.Model):
     size_name = models.CharField(max_length=50)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class Review(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
+    review_text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Review by {self.user} on {self.product}'
+
+class Rating(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='ratings')
+    rating = models.PositiveIntegerField()  # Ensure ratings are positive integers (e.g., 1-5)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Rating {self.rating} by {self.user} for {self.product}'

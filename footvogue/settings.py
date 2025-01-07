@@ -132,7 +132,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 
 
-AUTH_USER_MODEL = 'footvogueapp.CustomUser'  # Replace 'yourapp' with your app name
+AUTH_USER_MODEL = 'footvogueapp.CustomUser'  
 
 import os
 from dotenv import load_dotenv

@@ -1,5 +1,6 @@
 {% extends "user/home.html" %}
-{% load static %}
+{% load custom_tags %}
+
 {% block content %}
 
 		<!-- BREADCRUMB -->
@@ -34,35 +35,33 @@
                   <!-- Product main img -->
                     <div class="col-md-5 col-md-push-2">
                         <div id="product-main-img">
-                            {% for variant in product.productvariant_set.all %}
-                                {% for image in variant.productimage_set.all %}
-                                    <div class="product-preview">
-                                        <img src="{{ image.image_url.url }}" alt="{{ product.name }} - {{ variant.color.color_name }} - {{ variant.size.size_name }}">
-                                    </div>
-                                {% endfor %}
+                            {% for image in selected_variant.productimage_set.all %}
+                                <div class="product-preview">
+                                    <img src="{{ image.image_url.url }}" alt="{{ product.name }} - {{ selected_variant.color.color_name }} - {{ selected_variant.size.size_name }}">
+                                </div>
                             {% endfor %}
                         </div>
                     </div>
-                    <!-- /Product main img -->
 
-                    <!-- Product thumb imgs -->
+                    <!-- Product Thumbnail Images -->
                     <div class="col-md-2 col-md-pull-5">
                         <div id="product-imgs">
-                            {% for variant in product.productvariant_set.all %}
-                                {% for image in variant.productimage_set.all %}
-                                    <div class="product-preview">
-                                        <img src="{{ image.image_url.url }}" alt="{{ product.name }} - {{ variant.color.color_name }} - {{ variant.size.size_name }}">
-                                    </div>
-                                {% endfor %}
+                            {% for image in selected_variant.productimage_set.all %}
+                                <div class="product-preview">
+                                    <img src="{{ image.image_url.url }}" alt="{{ product.name }} - {{ selected_variant.color.color_name }} - {{ selected_variant.size.size_name }}">
+                                </div>
                             {% endfor %}
                         </div>
                     </div>
                     <!-- /Product thumb imgs -->
 
-					<!-- /Product thumb imgs -->
+					<!-- Product Details -->
                     <div class="col-md-5">
                         <div class="product-details">
+                            <!-- Product Name -->
                             <h2 class="product-name">{{ product.name }}</h2>
+
+                            <!-- Product Rating -->
                             <div>
                                 <div class="product-rating">
                                     <i class="fa fa-star"></i>
@@ -73,43 +72,48 @@
                                 </div>
                                 <a class="review-link" href="#">10 Review(s) | Add your review</a>
                             </div>
+
+                            <!-- Product Price -->
                             <div>
                                 <h3 class="product-price">
-                                    {% for variant in variants %}
-                                        <p>
-                                            {{ variant.price }}
-                                            {% if variant.old_price %}
-                                                <del class="product-old-price">{{ variant.old_price }}</del>
-                                            {% endif %}
-                                        </p>
-                                    {% endfor %}
+                                    {{ selected_variant.price }}
+                                    {% if selected_variant.old_price %}
+                                        <del class="product-old-price">{{ selected_variant.old_price }}</del>
+                                    {% endif %}
                                 </h3>
-                                
-                                <span class="product-available">In Stock</span>
+                                <span class="product-available">
+                                    {% if selected_variant.stock > 0 %} In Stock {% else %} Out of Stock {% endif %}
+                                </span>
                             </div>
+
+                            <!-- Product Description -->
                             <p>{{ product.description }}</p>
 
-                            <!-- Product variants -->
+                            <!-- Product Variants -->
                             <div class="product-options">
                                 <label>
                                     Size
-                                    <select class="input-select" name="size">
-                                        {% for variant in product.productvariant_set.all %}
-                                            <option value="{{ variant.size.size_name }}">{{ variant.size.size_name }}</option>
+                                    <select class="input-select" name="size" onchange="updateVariant()">
+                                        {% for variant in variants %}
+                                            <option value="{{ variant.id }}" {% if variant.id == selected_variant.id %}selected{% endif %}>
+                                                {{ variant.size.size_name }}
+                                            </option>
                                         {% endfor %}
                                     </select>
                                 </label>
                                 <label>
                                     Color
-                                    <select class="input-select" name="color">
-                                        {% for variant in product.productvariant_set.all %}
-                                            <option value="{{ variant.color.color_name }}">{{ variant.color.color_name }}</option>
+                                    <select class="input-select" name="color" onchange="updateVariant()">
+                                        {% for variant in variants %}
+                                            <option value="{{ variant.id }}" {% if variant.id == selected_variant.id %}selected{% endif %}>
+                                                {{ variant.color.color_name }}
+                                            </option>
                                         {% endfor %}
                                     </select>
                                 </label>
                             </div>
-                            
-                            
+
+                            <!-- Add to Cart -->
                             <div class="add-to-cart">
                                 <div class="qty-label">
                                     Qty
@@ -122,17 +126,31 @@
                                 <button class="add-to-cart-btn"><i class="fa fa-shopping-cart"></i> Add to Cart</button>
                             </div>
 
+                            <!-- Wishlist and Categories -->
                             <ul class="product-btns">
                                 <li><a href="#"><i class="fa fa-heart-o"></i> Add to Wishlist</a></li>
-                                <!-- <li><a href="#"><i class="fa fa-exchange"></i> Add to Compare</a></li> -->
                             </ul>
+                           <!-- Product Variant Colors -->
+                            <div class="product-options">
+                                <label>Available Colors:</label>
+                                <div class="color-options" style="display: flex; flex-wrap: nowrap; overflow-x: auto;">
+                                    {% for variant in variants %}
+                                        <a 
+                                            href="{% url 'product_details_variant' product.id variant.id %}" 
+                                            class="color-swatch" 
+                                            style="background-image: url('{{ variant.productimage_set.first.image_url.url }}'); 
+                                                background-size: cover; 
+                                                background-position: center; 
+                                                width: 50px; height: 50px; 
+                                                margin-right: 10px; display: inline-block; border-radius: 50%;">
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            </div>
 
-                            <ul class="product-links">
-                                <li>Category:</li>
-                                <li><a href="#">Headphones</a></li>
-                                <li><a href="#">Accessories</a></li>
-                            </ul>
+                            
 
+                            <!-- Share Links -->
                             <ul class="product-links">
                                 <li>Share:</li>
                                 <li><a href="#"><i class="fa fa-facebook"></i></a></li>
@@ -140,10 +158,162 @@
                                 <li><a href="#"><i class="fa fa-google-plus"></i></a></li>
                                 <li><a href="#"><i class="fa fa-envelope"></i></a></li>
                             </ul>
-
                         </div>
                     </div>
-                    <!-- /Product details -->
+                    <!-- /Product Details -->
+                   
+					<!-- Product Tab -->
+<div class="col-md-12">
+    <div id="product-tab">
+        <!-- Product Tab Navigation -->
+        <ul class="tab-nav">
+            <li class="active"><a data-toggle="tab" href="#tab1">Description</a></li>
+            <li><a data-toggle="tab" href="#tab2">Details</a></li>
+            <li><a data-toggle="tab" href="#tab3">Reviews ({{ reviews.count }})</a></li>
+        </ul>
+        <!-- /Product Tab Navigation -->
+
+        <!-- Product Tab Content -->
+        <div class="tab-content">
+            <!-- Tab 1: Description -->
+            <div id="tab1" class="tab-pane fade in active">
+                <div class="row">
+                    <div class="col-md-12">
+                        <p>{{ product.description }}</p>
+                    </div>
+                </div>
+            </div>
+            <!-- /Tab 1: Description -->
+
+            <!-- Tab 2: Details -->
+            <div id="tab2" class="tab-pane fade in">
+                <div class="row">
+                    <div class="col-md-12">
+                        <p>{{ product.details }}</p>
+                    </div>
+                </div>
+            </div>
+            <!-- /Tab 2: Details -->
+
+            <!-- Tab 3: Reviews -->
+            <div id="tab3" class="tab-pane fade in">
+                <div class="row">
+                    <!-- Rating -->
+                    <div class="col-md-3">
+                        <div id="rating">
+                            <ul class="rating">
+                                {% for rating in rating_breakdown %}
+                                    <li>
+                                        <div class="rating-stars">
+                                            <!-- For filled stars -->
+                                            {% for _ in rating.rating|times %}
+                                                <i class="fa fa-star"></i>
+                                            {% endfor %}
+                                            <!-- For empty stars -->
+                                            {% for _ in 5|subtract:rating.rating|times %}
+                                                <i class="fa fa-star-o"></i>
+                                            {% endfor %}
+                                        </div>
+                                        <span>{{ rating.percentage }}%</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    <!-- /Rating -->
+<!-- Reviews -->
+<div class="col-md-6">
+    <div id="reviews">
+        <ul class="reviews">
+            {% for review in reviews %}
+                <li>
+                    <div class="review-heading">
+                        <h5 class="name">{{ review.user.username }}</h5>
+                        <p class="date">{{ review.created_at|date:"d M Y, H:i A" }}</p>
+                        <div class="review-rating">
+                            <!-- Handle missing rating_value safely -->
+                            {% if review.rating_value %}
+                                <!-- For filled stars -->
+                                {% for _ in review.rating_value|times %}
+                                    <i class="fa fa-star"></i>
+                                {% endfor %}
+                                <!-- For empty stars -->
+                                {% for _ in 5|subtract:review.rating_value|times %}
+                                    <i class="fa fa-star-o"></i>
+                                {% endfor %}
+                            {% else %}
+                                <i class="fa fa-star-o"></i> <!-- Default to empty star if no rating -->
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="review-body">
+                        <p>{{ review.review_text }}</p>
+                    </div>
+                </li>
+            {% empty %}
+                <li>No reviews yet. Be the first to review this product!</li>
+            {% endfor %}
+        </ul>
+
+        <!-- Pagination -->
+        <ul class="reviews-pagination">
+            {% for page_num in reviews.paginator.page_range %}
+                <li class="{% if reviews.number == page_num %}active{% endif %}">
+                    <a href="?page={{ page_num }}">{{ page_num }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+<!-- /Reviews -->
+
+
+
+
+
+                    <!-- Review Form -->
+                    <div class="col-md-3">
+                        <div id="review-form">
+                            <form method="POST" id="review-form" action="{% url 'submit_review_and_rating' product.id %}" class="review-form">
+                                {% csrf_token %}
+                                
+                                <!-- Name (optional, if needed) -->
+                                <input class="input" type="text" name="name" placeholder="Your Name" value="{{ request.user.username }}" readonly>
+
+                                <!-- Email (optional, if needed) -->
+                                <input class="input" type="email" name="email" placeholder="Your Email" value="{{ request.user.email }}" readonly>
+
+                                <!-- Review Text Area -->
+                                <textarea class="input" name="review_text" placeholder="Your Review" required></textarea>
+
+                                <!-- Rating Section -->
+                                <div class="input-rating">
+                                    <span>Your Rating: </span>
+                                    <div class="stars">
+                                        <input id="star5" name="rating" value="5" type="radio"><label for="star5"></label>
+                                        <input id="star4" name="rating" value="4" type="radio"><label for="star4"></label>
+                                        <input id="star3" name="rating" value="3" type="radio"><label for="star3"></label>
+                                        <input id="star2" name="rating" value="2" type="radio"><label for="star2"></label>
+                                        <input id="star1" name="rating" value="1" type="radio"><label for="star1"></label>
+                                    </div>
+                                </div>
+
+                                <!-- Submit Button -->
+                                <button class="primary-btn" type="submit">Submit</button>
+                            </form>
+
+                            <!-- Message Display -->
+                            <div id="review-message" style="display:none;"></div>
+                        </div>
+                    </div>
+                    <!-- /Review Form -->
+                </div>
+            </div>
+            <!-- /Tab 3: Reviews -->
+        </div>
+        <!-- /Product Tab Content -->
+    </div>
+</div>
 
 				<!-- /row -->
 			</div>
@@ -325,4 +495,50 @@
 		</div>
 		<!-- /NEWSLETTER -->
 {% endblock %}
-		
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Get the review form
+        const reviewForm = document.getElementById('review-form');
+        
+        reviewForm.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent the form from submitting traditionally
+
+            // Use FormData to capture the form data
+            const formData = new FormData(reviewForm);
+
+            // Send the form data via AJAX
+            fetch(reviewForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name="csrfmiddlewaretoken"]').value,
+                },
+            })
+            .then(response => response.json())  // Parse the JSON response
+            .then(data => {
+                // Get the message container
+                const messageContainer = document.getElementById('review-message');
+
+                if (data.success) {
+                    // Show success message
+                    messageContainer.style.display = 'block';
+                    messageContainer.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                } else {
+                    // Show error messages
+                    messageContainer.style.display = 'block';
+                    let errorMessages = '';
+                    for (let field in data.errors) {
+                        errorMessages += `<p><strong>${field}</strong>: ${data.errors[field].join(', ')}</p>`;
+                    }
+                    messageContainer.innerHTML = `<div class="alert alert-danger">${errorMessages}</div>`;
+                }
+            })
+            .catch(error => {
+                // Show a generic error message if the AJAX request fails
+                const messageContainer = document.getElementById('review-message');
+                messageContainer.style.display = 'block';
+                messageContainer.innerHTML = '<div class="alert alert-danger">Something went wrong. Please try again later.</div>';
+            });
+        });
+    });
+</script>

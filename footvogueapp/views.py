@@ -3,19 +3,23 @@ from .models import *
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout
 from django.http import JsonResponse
-from django.utils.timezone import now
-from .utils import send_sms
 import phonenumbers
 from phonenumbers import NumberParseException
-from django.contrib.auth.decorators import user_passes_test
 import logging
 from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth.decorators import login_required
+from .forms import ReviewForm, RatingForm
+from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404
+from .models import Product, ProductVariant, Review, Rating
+from django.db.models import Avg
+from django.core.paginator import Paginator
 
-from django.db.models import Prefetch
+from django.db.models import Avg
 
-def product_details(request, product_id):
-    # Fetch the product and its category
+def product_details(request, product_id, variant_id=None):
+    # Fetch the product and ensure it's not deleted
     product = get_object_or_404(Product, id=product_id, is_deleted=False)
 
     # Get the category and its parent categories (if any)
@@ -28,18 +32,106 @@ def product_details(request, product_id):
     # Get all variants for the product
     variants = product.productvariant_set.all()  # Assuming ProductVariant is related via a ForeignKey to Product
 
-    # Pass product, variants, and categories to context
+    # If a variant_id is provided, use that; otherwise, default to the first variant
+    selected_variant = get_object_or_404(product.productvariant_set, id=variant_id) if variant_id else variants.first()
+
+    # Calculate the average rating from the Rating model
+    ratings = Rating.objects.filter(product=product)
+    total_ratings = ratings.count()
+    avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
+    rounded_avg_rating = round(avg_rating) if avg_rating else 0  # Round to the nearest integer
+
+    # Prepare the star ranges
+    filled_stars_range = range(rounded_avg_rating)  # Range for filled stars
+    empty_stars_range = range(5 - rounded_avg_rating)  # Range for empty stars
+
+    # Pagination for reviews (optional, show 5 reviews per page)
+    reviews = Review.objects.filter(product=product)
+    paginator = Paginator(reviews.order_by('-created_at'), 5)  # Order by creation date, latest first
+    page_number = request.GET.get('page')
+    reviews_page = paginator.get_page(page_number)
+
+    # Attach the rating for each review to the review object
+    for review in reviews_page:
+        review.rating_value = Rating.objects.filter(user=review.user, product=product).first().rating if Rating.objects.filter(user=review.user, product=product).exists() else 0
+
+    # Pass the necessary values to the template
     context = {
         'product': product,
+        'selected_variant': selected_variant,
         'variants': variants,
         'categories': categories,
+        'avg_rating': avg_rating,
+        'filled_stars_range': filled_stars_range,
+        'empty_stars_range': empty_stars_range,
+        'rating_breakdown': [{'rating': i, 'percentage': 20} for i in range(1, 6)],  # Placeholder data
+        'reviews': reviews_page,  # Paginated reviews
     }
+
     return render(request, 'user/product_details.html', context)
 
 
+@login_required(login_url='login')
+def submit_review_and_rating(request, product_id):
+    """
+    Handle both review and rating submission for a product and stay on the same page.
+    """
+    product = get_object_or_404(Product, id=product_id)
 
+    # Initialize the forms for review and rating
+    review_form = ReviewForm(request.POST or None)
+    rating_value = request.POST.get('rating')  # Assuming 'rating' is the name of the rating field
 
+    if request.method == 'POST':
+        review_submitted = False
+        rating_submitted = False
 
+        # Handle the review form submission
+        if review_form.is_valid():
+            review = review_form.save(commit=False)
+            review.user = request.user
+            review.product = product
+            review.save()
+            review_submitted = True
+
+        # Handle the rating submission
+        if rating_value:
+            # Check if a rating exists or create a new one
+            rating, created = Rating.objects.update_or_create(
+                user=request.user,
+                product=product,
+                defaults={'rating': rating_value}
+            )
+            rating_submitted = True
+
+        # Determine success message based on what was submitted
+        if review_submitted and rating_submitted:
+            success_message = 'Review and rating submitted successfully!'
+        elif review_submitted:
+            success_message = 'Review submitted successfully!'
+        elif rating_submitted:
+            success_message = 'Rating submitted successfully!'
+        else:
+            success_message = 'No submission was made.'
+
+        # Return the updated page with success or error message
+        return render(request, 'user/product_details.html', {
+            'product': product,
+            'reviews': Review.objects.filter(product=product).order_by('-created_at'),
+            'success_message': success_message,
+            'review_form': ReviewForm(),  # Reset the form for next submission
+            'rating_form': RatingForm(),  # Reset the rating form if you have one
+        })
+    else:
+        # If not POST request, return the page with the initial forms
+        return render(request, 'product_reviews.html', {
+            'product': product,
+            'reviews': Review.objects.filter(product=product).order_by('-created_at'),
+            'review_form': ReviewForm(),
+            'rating_form': RatingForm()  # Empty form
+        })
+    
+    
 
 
 def home(request):
