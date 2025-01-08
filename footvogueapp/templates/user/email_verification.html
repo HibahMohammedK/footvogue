@@ -1,0 +1,21 @@
+{% extends "user/home.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow p-4">
+                <h3 class="text-center mb-4">Email Verification</h3>
+                <form method="POST" action="">
+                    {% csrf_token %}
+                    <div class="form-group mb-3">
+                        <label for="otp">Enter OTP</label>
+                        <input type="text" name="otp" id="otp" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Verify Email</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

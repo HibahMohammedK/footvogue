@@ -21,35 +21,9 @@
                         <div class="form-group mb-3" id="password-field">
                             <input class="form-control" type="password" name="password" placeholder="Enter Your Password" required>
                         </div>
-
-                        <!-- Phone Field for OTP -->
-                        <div class="form-group mb-3" id="phone-field" style="display: none;">
-                            <div class="input-group">
-                                <select id="country-code" class="form-select" style="max-width: 120px;">
-                                    <option value="+1">+1 (USA)</option>
-                                    <option value="+91" selected>+91 (India)</option>
-                                    <option value="+44">+44 (UK)</option>
-                                </select>
-                                <input type="tel" id="phone-number" class="form-control" name="phone_number" placeholder="Enter your phone number">
-                            </div>
-                        </div>
-
-                        <!-- OTP Field -->
-                        <div class="form-group mb-3" id="otp-field" style="display: none;">
-                            <input class="form-control" type="text" name="otp" placeholder="Enter OTP">
-                        </div>
-
-                        <!-- Login Buttons -->
-                        <button type="submit" class="btn btn-danger w-100 mb-3" id="login-btn">Login</button>
-                        <button type="button" id="send-otp-btn" class="btn btn-warning w-100 mb-3" style="display: none;">Send OTP</button>
-
+                        <button type="submit" class="btn btn-primary">Login</button>
                     </form>
 
-                    <!-- Switch Between Login Modes -->
-                    <div class="text-center">
-                        <button type="button" id="otp-login-btn" class="btn btn-outline-info w-100">Login with OTP</button>
-                        <button type="button" id="email-login-btn" class="btn btn-outline-secondary w-100" style="display: none;">Back to Email Login</button>
-                    </div>
 
                     <!-- Messages -->
                     {% if messages %}
@@ -68,69 +42,4 @@
     </div>
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const otpLoginBtn = document.getElementById('otp-login-btn');
-        const sendOtpBtn = document.getElementById('send-otp-btn');
-        const emailLoginBtn = document.getElementById('email-login-btn');
-        const passwordField = document.getElementById('password-field');
-        const phoneField = document.getElementById('phone-field');
-        const otpField = document.getElementById('otp-field');
-        const loginBtn = document.getElementById('login-btn');
-
-        // Switch to OTP Login
-        otpLoginBtn.addEventListener('click', function () {
-            passwordField.style.display = 'none';
-            phoneField.style.display = 'block';
-            otpField.style.display = 'block';
-            sendOtpBtn.style.display = 'block';
-            otpLoginBtn.style.display = 'none';
-            emailLoginBtn.style.display = 'block';
-            loginBtn.style.display = 'none';
-        });
-
-        // Switch Back to Email Login
-        emailLoginBtn.addEventListener('click', function () {
-            passwordField.style.display = 'block';
-            phoneField.style.display = 'none';
-            otpField.style.display = 'none';
-            sendOtpBtn.style.display = 'none';
-            otpLoginBtn.style.display = 'block';
-            emailLoginBtn.style.display = 'none';
-            loginBtn.style.display = 'block';
-        });
-
-        // Send OTP Functionality
-        sendOtpBtn.addEventListener('click', function () {
-            const phoneNumber = document.getElementById('phone-number').value;
-            const countryCode = document.getElementById('country-code').value;
-
-            if (!phoneNumber) {
-                alert("Please enter your phone number.");
-                return;
-            }
-
-            fetch("{% url 'send_otp' %}", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({ phone_number: countryCode + phoneNumber })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert("OTP sent successfully!");
-                } else {
-                    alert("Failed to send OTP. Reason: " + (data.error || "Unknown error"));
-                }
-            })
-            .catch(error => {
-                alert("An error occurred while sending OTP.");
-                console.error("Error:", error);
-            });
-        });
-    });
-</script>
 {% endblock %}
