@@ -2,153 +2,16 @@ from django.shortcuts import render, redirect, get_object_or_404
 from .models import *
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout
-from django.http import JsonResponse
-import phonenumbers
-from phonenumbers import NumberParseException
+from django.views.decorators.cache import never_cache
 import logging
-from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth.decorators import login_required
 from .forms import ReviewForm, RatingForm
-from django.shortcuts import get_object_or_404, render
-from django.shortcuts import render, get_object_or_404
-from django.shortcuts import render, get_object_or_404
-from .models import Product, ProductVariant, Review, Rating
-from django.db.models import Avg
-from django.core.paginator import Paginator
-
-from django.db.models import Avg
-
-from django.shortcuts import render, get_object_or_404
-from .models import Product, Rating, Review, Category
 from django.core.paginator import Paginator
 from django.db.models import Avg
-def product_details(request, product_id, variant_id=None):
-    # Fetch the product and ensure it's not deleted
-    product = get_object_or_404(Product, id=product_id, is_deleted=False)
+from .utils import generate_and_send_otp 
+   
 
-    # Get the category and its parent categories (if any)
-    categories = []
-    current_category = product.category
-    while current_category:
-        categories.insert(0, current_category)  # Insert at the beginning to maintain the correct order
-        current_category = current_category.parent_category  # Move to the parent category
-
-    # Get all variants for the product
-    variants = product.productvariant_set.all()  # Assuming ProductVariant is related via a ForeignKey to Product
-
-    # If a variant_id is provided, use that; otherwise, default to the first variant
-    selected_variant = get_object_or_404(product.productvariant_set, id=variant_id) if variant_id else variants.first()
-
-    # Calculate the average rating from the Rating model
-    ratings = Rating.objects.filter(product=product)
-    total_ratings = ratings.count()
-    avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
-    rounded_avg_rating = round(avg_rating) if avg_rating else 0  # Round to the nearest integer
-
-    # Prepare the star ranges
-    filled_stars_range = range(rounded_avg_rating)  # Range for filled stars
-    empty_stars_range = range(5 - rounded_avg_rating)  # Range for empty stars
-
-    # Pagination for reviews (optional, show 5 reviews per page)
-    reviews = Review.objects.filter(product=product)
-    paginator = Paginator(reviews.order_by('-created_at'), 5)  # Order by creation date, latest first
-    page_number = request.GET.get('page')
-    reviews_page = paginator.get_page(page_number)
-
-    # Attach the rating for each review to the review object
-    for review in reviews_page:
-        review.rating_value = Rating.objects.filter(user=review.user, product=product).first().rating if Rating.objects.filter(user=review.user, product=product).exists() else 0
-
-    # Get related products
-    related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]  # Adjust the number of related products as needed
-
-    # Calculate avg_rating for related products
-    for related_product in related_products:
-        ratings = Rating.objects.filter(product=related_product)
-        total_ratings = ratings.count()
-        related_product.avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
-
-    # Pass the necessary values to the template
-    context = {
-        'product': product,
-        'selected_variant': selected_variant,
-        'variants': variants,
-        'categories': categories,
-        'avg_rating': avg_rating,
-        'filled_stars_range': filled_stars_range,
-        'empty_stars_range': empty_stars_range,
-        'rating_breakdown': [{'rating': i, 'percentage': 20} for i in range(1, 6)],  # Placeholder data
-        'reviews': reviews_page,  # Paginated reviews
-        'related_products': related_products  # Pass related products with avg_rating
-    }
-
-    return render(request, 'user/product_details.html', context)
-
-
-
-@login_required(login_url='login')
-def submit_review_and_rating(request, product_id):
-    """
-    Handle both review and rating submission for a product and stay on the same page.
-    """
-    product = get_object_or_404(Product, id=product_id)
-
-    # Initialize the forms for review and rating
-    review_form = ReviewForm(request.POST or None)
-    rating_value = request.POST.get('rating')  # Assuming 'rating' is the name of the rating field
-
-    if request.method == 'POST':
-        review_submitted = False
-        rating_submitted = False
-
-        # Handle the review form submission
-        if review_form.is_valid():
-            review = review_form.save(commit=False)
-            review.user = request.user
-            review.product = product
-            review.save()
-            review_submitted = True
-
-        # Handle the rating submission
-        if rating_value:
-            # Check if a rating exists or create a new one
-            rating, created = Rating.objects.update_or_create(
-                user=request.user,
-                product=product,
-                defaults={'rating': rating_value}
-            )
-            rating_submitted = True
-
-        # Determine success message based on what was submitted
-        if review_submitted and rating_submitted:
-            success_message = 'Review and rating submitted successfully!'
-        elif review_submitted:
-            success_message = 'Review submitted successfully!'
-        elif rating_submitted:
-            success_message = 'Rating submitted successfully!'
-        else:
-            success_message = 'No submission was made.'
-
-        # Return the updated page with success or error message
-        return render(request, 'user/product_details.html', {
-            'product': product,
-            'reviews': Review.objects.filter(product=product).order_by('-created_at'),
-            'success_message': success_message,
-            'review_form': ReviewForm(),  # Reset the form for next submission
-            'rating_form': RatingForm(),  # Reset the rating form if you have one
-        })
-    else:
-        # If not POST request, return the page with the initial forms
-        return render(request, 'product_reviews.html', {
-            'product': product,
-            'reviews': Review.objects.filter(product=product).order_by('-created_at'),
-            'review_form': ReviewForm(),
-            'rating_form': RatingForm()  # Empty form
-        })
-    
-    
-
-
+@never_cache
 def home(request):
     # Fetch products from the database
     products = Product.objects.prefetch_related(
@@ -161,18 +24,13 @@ def home(request):
     # Render the home template with products and rating range
     return render(request, 'user/home.html', {'products': products, 'rating_range': rating_range})
 
-# Register View
+@never_cache
 def register_view(request):
     if request.method == "POST":
         username = request.POST.get("username").strip()
         email = request.POST.get("email").strip()
         password = request.POST.get("password").strip()
         confirm_password = request.POST.get("confirm_password").strip()
-        phone_number = request.POST.get("phone_number").strip()
-
-        if not username or not email or not password or not phone_number:
-            messages.error(request, "All fields are required.")
-            return redirect("register")
 
         if password != confirm_password:
             messages.error(request, "Passwords do not match.")
@@ -186,163 +44,113 @@ def register_view(request):
             messages.error(request, "Email already registered.")
             return redirect("register")
 
-        if CustomUser.objects.filter(phone_number=phone_number).exists():
-            messages.error(request, "Phone number already registered.")
-            return redirect("register")
-
-        try:
-            formatted_number = phonenumbers.format_number(
-                phonenumbers.parse(phone_number, None),
-                phonenumbers.PhoneNumberFormat.E164
-            )
-        except NumberParseException:
-            messages.error(request, "Invalid phone number format.")
-            return redirect("register")
-
+        # Create the user but set `is_verified=False`
         user = CustomUser.objects.create_user(
             username=username,
             email=email,
             password=password,
-            phone_number=formatted_number
+            is_verified=False
         )
         user.save()
 
-        messages.success(request, "Registration successful! Please log in.")
-        return redirect("login")
+        # Generate and send the OTP
+        generate_and_send_otp(user)
+
+        # Redirect to email verification page
+        messages.success(request, "Registration successful! Verify your email to activate your account.")
+        return redirect("email_verification")  # Define this route
 
     return render(request, "user/register.html")
+
+@never_cache
+def email_verification_view(request):
+    if request.method == "POST":
+        otp_code = request.POST.get("otp", "").strip()
+
+        try:
+            # Look for the OTP related to the user's email
+            otp = OTP.objects.get(otp=otp_code)
+
+            # Check if the OTP is expired
+            if otp.is_expired():
+                messages.error(request, "OTP has expired. Please request a new one.")
+                return redirect("email_verification")
+
+            # Mark the OTP as verified
+            otp.is_verified = True
+            otp.save()
+
+            # Mark the associated user as verified
+            user = otp.user
+            user.is_verified = True
+            user.save()
+
+            # Log the user in
+            auth_login(request, user)
+
+            # Display a success message and redirect to home
+            messages.success(request, "Email verified successfully! Welcome to the site.")
+            return redirect("home")  # Redirect to the home page after verification
+
+        except OTP.DoesNotExist:
+            messages.error(request, "Invalid OTP.")
+            return redirect("email_verification")
+
+    return render(request, "user/email_verification.html")
+
+
+
 
 # Logout View
 def logout_view(request):
     logout(request)
     return redirect('home')
 
+@never_cache
 def login_view(request):
+    # Redirect already authenticated users directly to home
+    if request.user.is_authenticated:
+        return redirect('home')
+
     if request.method == 'POST':
         login_identifier = request.POST.get('login_identifier')
-        password = request.POST.get('password', None)
-        otp = request.POST.get('otp', None)
-        is_otp_login = request.POST.get('is_otp_login')  # This flag determines if OTP login is being used
-        
-        try:
-            if is_otp_login:
-                # Handle OTP login
-                phone_number = login_identifier
-                try:
-                    # Validate and format phone number
-                    parsed_number = phonenumbers.parse(phone_number, None)
-                    formatted_number = phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
-                except NumberParseException:
-                    messages.error(request, 'Invalid phone number format. Please include the country code.')
-                    return redirect('login')
+        password = request.POST.get('password')
 
-                user_instance = CustomUser.objects.filter(phone_number=formatted_number).first()
-                if user_instance:
-                    otp_instance = OTP.objects.filter(user=user_instance, phone_number=formatted_number).first()
-                    if otp_instance and not otp_instance.is_expired() and otp_instance.otp == otp:
-                        otp_instance.is_verified = True
-                        otp_instance.save()
-                        auth_login(request, user_instance)
-                        messages.success(request, 'Logged in successfully via OTP!')
-                        if user_instance.is_superuser:  # Check if the user is an admin
-                            return redirect('admin_dash')  # Redirect to admin dashboard
-                        return redirect('home')
-                    else:
-                        messages.error(request, 'Invalid or expired OTP.')
-                else:
-                    messages.error(request, 'No user found with this phone number.')
+        user_instance = None
+        if '@' in login_identifier and '.' in login_identifier:
+            user_instance = CustomUser.objects.filter(email=login_identifier).first()
+        else:
+            user_instance = CustomUser.objects.filter(username=login_identifier).first()
+
+        if user_instance:
+            # Check if the user has verified their email
+            if not user_instance.is_verified:
+                messages.error(request, 'Please verify your email before logging in.')
+                return redirect('login')
+
+            # Authenticate the user
+            user = authenticate(request, username=user_instance.username, password=password)
+            if user:
+                # Log the user in
+                auth_login(request, user)
+
+                # Set the session to persist beyond the browser session
+                request.session.set_expiry(0)  # Session lasts until user explicitly logs out
+                
+                messages.success(request, 'Logged in successfully!')
+                return redirect('home')  # Redirect to the home page after login
             else:
-                # Handle traditional login (username/email + password)
-                user_instance = None
-                if '@' in login_identifier and '.' in login_identifier:
-                    user_instance = CustomUser.objects.filter(email=login_identifier).first()
-                else:
-                    user_instance = CustomUser.objects.filter(username=login_identifier).first()
-
-                if user_instance:
-                    user = authenticate(request, username=user_instance.username, password=password)
-                    if user:
-                        auth_login(request, user)
-                        messages.success(request, 'Logged in successfully!')
-                        if user.is_superuser:  # Check if the user is an admin
-                            return redirect('admin_dash')  # Redirect to admin dashboard
-                        return redirect('home')
-                    else:
-                        messages.error(request, 'Invalid credentials.')
-                else:
-                    messages.error(request, 'No user found with the provided identifier.')
-        except Exception as e:
-            messages.error(request, f"Error: {str(e)}")
+                messages.error(request, 'Invalid credentials.')
+        else:
+            messages.error(request, 'No user found with the provided identifier.')
 
     return render(request, 'login.html')
 
 
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import json
-
-@csrf_exempt
-def send_otp(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            phone_number = data.get("phone_number")
-            if not phone_number:
-                return JsonResponse({"success": False, "error": "Phone number is required"})
-
-            # Simulate OTP generation and sending
-            otp = "1234"  # Replace with actual OTP generation logic
-            print(f"Sending OTP {otp} to {phone_number}")  # Debug: Log OTP
-            
-            return JsonResponse({"success": True})
-        except Exception as e:
-            return JsonResponse({"success": False, "error": str(e)})
-    return JsonResponse({"success": False, "error": "Invalid request"})
-
-# from twilio.rest import Client
-# from django.conf import settings
-# from django.http import JsonResponse
-
-# def send_otp(request):
-#     phone_number = request.POST.get('phone_number')
-#     otp = OTP.generate_otp()  # Use a function to generate the OTP
-    
-#     # Create a Twilio client
-#     client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-    
-#     try:
-#         message = client.messages.create(
-#             body=f"Your OTP is {otp}",
-#             from_=settings.TWILIO_PHONE_NUMBER,  # Twilio number
-#             to=phone_number
-#         )
-#         return JsonResponse({'success': True})
-#     except Exception as e:
-#         return JsonResponse({'success': False, 'error': str(e)})
-
-def verify_otp(request):
-    """Verify OTP entered by the user"""
-    if request.method == 'POST':
-        phone_number = request.POST.get('phone_number')
-        otp = request.POST.get('otp')
-        otp_instance = OTP.objects.filter(phone_number=phone_number, otp=otp).first()
-        if otp_instance and not otp_instance.is_expired() and not otp_instance.is_verified:
-            otp_instance.is_verified = True
-            otp_instance.save()
-            return JsonResponse({'success': True, 'message': 'OTP verified successfully.'})
-        else:
-            return JsonResponse({'success': False, 'message': 'Invalid or expired OTP.'})
-    return JsonResponse({'success': False, 'message': 'Invalid request method.'})
-
-
-
-
 ### admin view ###
 
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
-
 # Admin Dashboard Home
+@never_cache
 @login_required
 def admin_dash(request):
     if not request.user.is_superuser:
@@ -609,4 +417,129 @@ def delete_product(request, pk):
 
 
 
+def product_details(request, product_id, variant_id=None):
+    # Fetch the product and ensure it's not deleted
+    product = get_object_or_404(Product, id=product_id, is_deleted=False)
+
+    # Get the category and its parent categories (if any)
+    categories = []
+    current_category = product.category
+    while current_category:
+        categories.insert(0, current_category)  # Insert at the beginning to maintain the correct order
+        current_category = current_category.parent_category  # Move to the parent category
+
+    # Get all variants for the product
+    variants = product.productvariant_set.all()  # Assuming ProductVariant is related via a ForeignKey to Product
+
+    # If a variant_id is provided, use that; otherwise, default to the first variant
+    selected_variant = get_object_or_404(product.productvariant_set, id=variant_id) if variant_id else variants.first()
+
+    # Calculate the average rating from the Rating model
+    ratings = Rating.objects.filter(product=product)
+    total_ratings = ratings.count()
+    avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
+    rounded_avg_rating = round(avg_rating) if avg_rating else 0  # Round to the nearest integer
+
+    # Prepare the star ranges
+    filled_stars_range = range(rounded_avg_rating)  # Range for filled stars
+    empty_stars_range = range(5 - rounded_avg_rating)  # Range for empty stars
+
+    # Pagination for reviews (optional, show 5 reviews per page)
+    reviews = Review.objects.filter(product=product)
+    paginator = Paginator(reviews.order_by('-created_at'), 5)  # Order by creation date, latest first
+    page_number = request.GET.get('page')
+    reviews_page = paginator.get_page(page_number)
+
+    # Attach the rating for each review to the review object
+    for review in reviews_page:
+        review.rating_value = Rating.objects.filter(user=review.user, product=product).first().rating if Rating.objects.filter(user=review.user, product=product).exists() else 0
+
+    # Get related products
+    related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]  # Adjust the number of related products as needed
+
+    # Calculate avg_rating for related products
+    for related_product in related_products:
+        ratings = Rating.objects.filter(product=related_product)
+        total_ratings = ratings.count()
+        related_product.avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
+
+    # Pass the necessary values to the template
+    context = {
+        'product': product,
+        'selected_variant': selected_variant,
+        'variants': variants,
+        'categories': categories,
+        'avg_rating': avg_rating,
+        'filled_stars_range': filled_stars_range,
+        'empty_stars_range': empty_stars_range,
+        'rating_breakdown': [{'rating': i, 'percentage': 20} for i in range(1, 6)],  # Placeholder data
+        'reviews': reviews_page,  # Paginated reviews
+        'related_products': related_products  # Pass related products with avg_rating
+    }
+
+    return render(request, 'user/product_details.html', context)
+
+
+
+@login_required(login_url='login')
+def submit_review_and_rating(request, product_id):
+    """
+    Handle both review and rating submission for a product and stay on the same page.
+    """
+    product = get_object_or_404(Product, id=product_id)
+
+    # Initialize the forms for review and rating
+    review_form = ReviewForm(request.POST or None)
+    rating_value = request.POST.get('rating')  # Assuming 'rating' is the name of the rating field
+
+    if request.method == 'POST':
+        review_submitted = False
+        rating_submitted = False
+
+        # Handle the review form submission
+        if review_form.is_valid():
+            review = review_form.save(commit=False)
+            review.user = request.user
+            review.product = product
+            review.save()
+            review_submitted = True
+
+        # Handle the rating submission
+        if rating_value:
+            # Check if a rating exists or create a new one
+            rating, created = Rating.objects.update_or_create(
+                user=request.user,
+                product=product,
+                defaults={'rating': rating_value}
+            )
+            rating_submitted = True
+
+        # Determine success message based on what was submitted
+        if review_submitted and rating_submitted:
+            success_message = 'Review and rating submitted successfully!'
+        elif review_submitted:
+            success_message = 'Review submitted successfully!'
+        elif rating_submitted:
+            success_message = 'Rating submitted successfully!'
+        else:
+            success_message = 'No submission was made.'
+
+        # Return the updated page with success or error message
+        return render(request, 'user/product_details.html', {
+            'product': product,
+            'reviews': Review.objects.filter(product=product).order_by('-created_at'),
+            'success_message': success_message,
+            'review_form': ReviewForm(),  # Reset the form for next submission
+            'rating_form': RatingForm(),  # Reset the rating form if you have one
+        })
+    else:
+        # If not POST request, return the page with the initial forms
+        return render(request, 'product_reviews.html', {
+            'product': product,
+            'reviews': Review.objects.filter(product=product).order_by('-created_at'),
+            'review_form': ReviewForm(),
+            'rating_form': RatingForm()  # Empty form
+        })
+    
+ 
 

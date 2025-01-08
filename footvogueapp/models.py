@@ -2,7 +2,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from PIL import Image
-import random
+import secrets
 import string
 from django.utils import timezone
 from django.conf import settings
@@ -23,15 +23,15 @@ class CustomUser(AbstractUser):
 
 
 class OTP(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, null=True, blank=True)  # Link to CustomUser instead of User
-    phone_number = models.CharField(max_length=15)  # Store the phone number
-    otp = models.CharField(max_length=6)  # OTP code (6 digits)
-    created_at = models.DateTimeField(auto_now_add=True)  # Timestamp when OTP was created
-    is_verified = models.BooleanField(default=False)  # Whether the OTP is verified
+    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE, null=True, blank=True)
+    email = models.EmailField()
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    is_verified = models.BooleanField(default=False)
 
     def generate_otp(self):
-        """Generate a random 6-digit OTP"""
-        self.otp = ''.join(random.choices(string.digits, k=6))  # Generate a random OTP
+        """Generate a secure random 6-digit OTP"""
+        self.otp = ''.join(secrets.choice(string.digits) for _ in range(6))
         self.save()
 
     def is_expired(self):
@@ -39,7 +39,15 @@ class OTP(models.Model):
         return timezone.now() - self.created_at > timezone.timedelta(minutes=5)
 
     def __str__(self):
-        return f"OTP for {self.user.username} ({self.phone_number})"
+        return f"OTP for {self.user.username if self.user else self.email} - {self.otp}"
+
+    class Meta:
+        unique_together = ('email', 'otp')
+        indexes = [
+            models.Index(fields=['email']),
+            models.Index(fields=['otp']),
+        ]
+
 
 #### admin models ###
 

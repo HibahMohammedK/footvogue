@@ -134,16 +134,13 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 AUTH_USER_MODEL = 'footvogueapp.CustomUser'  
 
-import os
-from dotenv import load_dotenv
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'hibahaslam411@gmail.com'
+EMAIL_HOST_PASSWORD = 'REDACTED'
 
-# Load environment variables from the .env file
-load_dotenv()
-
-# Now you can safely use your credentials
-TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
-TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
-TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
 
 
 
