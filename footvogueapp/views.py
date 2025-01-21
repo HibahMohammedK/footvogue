@@ -9,6 +9,14 @@ from .forms import ReviewForm, RatingForm
 from django.core.paginator import Paginator
 from django.db.models import Avg
 from .utils import generate_and_send_otp 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth import update_session_auth_hash
+from django.urls import reverse
+from django.http import HttpResponse
+
+
    
 
 @never_cache
@@ -21,8 +29,33 @@ def home(request):
     # Create a rating range (1 to 5) for use in the template
     rating_range = range(1, 6)
 
+    # Fetch cart items for the logged-in user
+    cart_items = []
+    total_price = 0
+
+    if request.user.is_authenticated:
+        # Retrieve all cart items for the logged-in user
+        cart_items = Cart.objects.filter(user=request.user)
+        
+        # Calculate the total price of items in the cart
+        total_price = sum(item.quantity * item.product_variant.price for item in cart_items)
+
+        for item in cart_items:
+            # Retrieve the first image for the variant
+            image = ProductImage.objects.filter(variant=item.product_variant).first()
+            item.image_url = image.image_url.url if image else None
+
+
+    
+    context = {
+        'products': products, 
+        'rating_range': rating_range,
+        'cart_items': cart_items,
+        'total_price': total_price,
+    }
+
     # Render the home template with products and rating range
-    return render(request, 'user/home.html', {'products': products, 'rating_range': rating_range})
+    return render(request, 'user/home.html', context)
 
 @never_cache
 def register_view(request):
@@ -44,6 +77,14 @@ def register_view(request):
             messages.error(request, "Email already registered.")
             return redirect("register")
 
+        # Validate the password using Django's built-in validators
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            for error in e.messages:
+                messages.error(request, error)
+            return redirect("register")
+
         # Create the user but set `is_verified=False`
         user = CustomUser.objects.create_user(
             username=username,
@@ -61,6 +102,18 @@ def register_view(request):
         return redirect("email_verification")  # Define this route
 
     return render(request, "user/register.html")
+
+def resend_otp(request):
+    user_id = request.session.get('unverified_user_id')  # Get the unverified user's ID from the session
+    if user_id:
+        user = CustomUser.objects.filter(id=user_id).first()
+        if user:
+            generate_and_send_otp(user)
+            messages.success(request, 'OTP has been resent to your email.')
+            return redirect('email_verification')
+
+    messages.error(request, 'No user found to resend OTP. Please log in again.')
+    return redirect('login')
 
 @never_cache
 def email_verification_view(request):
@@ -106,9 +159,7 @@ def logout_view(request):
     logout(request)
     return redirect('home')
 
-@never_cache
 def login_view(request):
-    # Redirect already authenticated users directly to home
     if request.user.is_authenticated:
         return redirect('home')
 
@@ -123,28 +174,30 @@ def login_view(request):
             user_instance = CustomUser.objects.filter(username=login_identifier).first()
 
         if user_instance:
-            # Check if the user has verified their email
-            if not user_instance.is_verified:
-                messages.error(request, 'Please verify your email before logging in.')
-                return redirect('login')
+            if not user_instance.is_staff and not user_instance.is_verified:
+                # Store the user's ID in the session
+                request.session['unverified_user_id'] = user_instance.id
 
-            # Authenticate the user
+                # Generate and send OTP
+                generate_and_send_otp(user_instance)
+
+                messages.info(request, 'Your email is not verified. We have sent you an OTP. Please verify your email.')
+                return redirect('email_verification')
+
+            # Authenticate and log in verified users
             user = authenticate(request, username=user_instance.username, password=password)
             if user:
-                # Log the user in
                 auth_login(request, user)
-
-                # Set the session to persist beyond the browser session
-                request.session.set_expiry(0)  # Session lasts until user explicitly logs out
-                
-                messages.success(request, 'Logged in successfully!')
-                return redirect('home')  # Redirect to the home page after login
+                if user.is_staff:
+                    return redirect('admin_dash')
+                return redirect('home')
             else:
                 messages.error(request, 'Invalid credentials.')
         else:
             messages.error(request, 'No user found with the provided identifier.')
 
     return render(request, 'login.html')
+
 
 
 ### admin view ###
@@ -184,13 +237,18 @@ def user_management(request):
     return render(request, 'admin/user_management.html', {'users': users, 'query': query})
 
 
-# Block User
 @login_required
 def block_user(request, user_id):
     if not request.user.is_superuser:
-        return redirect('login')  # Ensure only admin can access
+        return redirect('login')  # Ensure only superusers can access
 
     user = get_object_or_404(CustomUser, id=user_id)
+    
+    # Prevent the admin from blocking themselves
+    if user == request.user:
+        messages.error(request, "You cannot block yourself.")
+        return redirect('user_management')
+    
     user.is_active = False  # Block the user
     user.save()
     messages.success(request, f"User {user.username} has been blocked.")
@@ -340,7 +398,7 @@ def add_product(request):
         messages.success(request, "Product and variants added successfully!")
         return redirect("add_product")
 
-    categories = Category.objects.all()
+    categories = Category.objects.all().exclude(is_deleted=True)
     return render(request, "admin/products/add_products.html", {"categories": categories})
 
 
@@ -433,6 +491,24 @@ def product_details(request, product_id, variant_id=None):
 
     # If a variant_id is provided, use that; otherwise, default to the first variant
     selected_variant = get_object_or_404(product.productvariant_set, id=variant_id) if variant_id else variants.first()
+
+
+     # Handle adding to cart (POST request)
+    if request.method == 'POST':
+        # Get the variant_id and quantity from the form
+        variant_id = request.POST.get('variant_id')
+        quantity = int(request.POST.get('quantity', 1))  # Default to 1 if no quantity is provided
+        
+        # Get the selected variant and add it to the cart
+        variant = get_object_or_404(ProductVariant, id=variant_id)
+
+        # Create or update the Cart item for the user
+        cart_item, created = Cart.objects.get_or_create(user=request.user, product_variant=variant)
+        if cart_item:
+            cart_item.quantity += quantity  # Increase the quantity
+            cart_item.save()
+        
+        return redirect('cart')  # Redirect to the cart view after adding the item
 
     # Calculate the average rating from the Rating model
     ratings = Rating.objects.filter(product=product)
@@ -542,4 +618,161 @@ def submit_review_and_rating(request, product_id):
         })
     
  
+@never_cache
+@login_required
+def profile(request):
+    user = request.user
+    addresses = Address.objects.filter(user=user)
+    orders = Order.objects.filter(user=user).order_by('-order_date')
+    active_tab = request.GET.get('active_tab', 'details')  
+    return render(request, 'user/profile.html', {
+        'user': user,
+        'addresses': addresses,
+        'orders': orders,
+        'active_tab': active_tab
+    })
 
+@never_cache
+@login_required
+def edit_profile(request):
+    if request.method == 'POST':
+        # Ensure you use the `request.POST` data to update the user instance
+        form = UserUpdateForm(request.POST, instance=request.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Your profile has been updated.')
+            return redirect('profile')  # Redirect after successful update
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = UserUpdateForm(instance=request.user)
+
+    return render(request, 'user/edit_profile.html', {'form': form})
+
+
+
+@never_cache
+@login_required
+def manage_address(request):
+    if request.method == 'POST':
+        form = AddressForm(request.POST)
+        if form.is_valid():
+            address = form.save(commit=False)
+            address.user = request.user
+            address.save()
+            messages.success(request, 'Address added successfully.')
+            return redirect(f'{reverse("profile")}?tab=addresses&sidebar_tab=addresses')
+    else:
+        form = AddressForm()
+    return render(request, 'user/manage_address.html', {'form': form})
+
+@never_cache
+@login_required
+def edit_address(request, id):
+    address = get_object_or_404(Address, id=id, user=request.user)
+    if request.method == 'POST':
+        form = AddressForm(request.POST, instance=address)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Address updated successfully.')
+            return redirect(f'{reverse("profile")}?tab=addresses&sidebar_tab=addresses')
+    else:
+        form = AddressForm(instance=address)
+    return render(request, 'user/edit_address.html', {'form': form})
+
+@never_cache
+@login_required
+def delete_address(request, id):
+    address = get_object_or_404(Address, id=id, user=request.user)
+    if request.method == 'POST':
+        address.delete()
+        messages.success(request, 'Address deleted successfully.')
+        return redirect('/profile?tab=addresses')
+    return redirect('/profile?tab=addresses')
+
+
+@never_cache
+@login_required
+def cancel_order(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    if order.status in ['Pending', 'Processing']:
+        order.status = 'Cancelled'
+        order.save()
+        messages.success(request, f"Order #{order_id} has been cancelled.")
+    else:
+        messages.error(request, "Order cannot be cancelled.")
+    return redirect('profile')
+
+
+def change_password(request):
+    if request.method == 'POST':
+        form = PasswordChangeForm(user=request.user, data=request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, 'Your password was successfully updated.')
+            return redirect('login')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = PasswordChangeForm(request.user)
+    return render(request, 'user/change_password.html', {'form': form})
+
+#cart
+
+def add_to_cart(request, variant_id):
+    variant = get_object_or_404(ProductVariant, id=variant_id)
+
+    # Get or create the user's cart item for this product variant
+    cart_item, created = Cart.objects.get_or_create(user=request.user, product_variant=variant)
+
+    if request.method == 'POST':
+        quantity = int(request.POST.get('quantity', 1))  # Default to 1 if no quantity is provided
+        
+        if quantity <= variant.stock_quantity:  # Ensure we do not exceed stock
+            cart_item.quantity = quantity
+            cart_item.save()
+            return redirect('cart_view')  # Redirect to cart view
+        else:
+            return HttpResponse("Not enough stock.", status=400)
+
+    return redirect('cart_view')  # Redirect if not a POST request
+
+
+def cart_view(request):
+    cart_items = Cart.get_user_cart(request.user)
+    cart_data = []
+
+    for item in cart_items:
+        image = ProductImage.objects.filter(variant=item.product_variant).first()
+        cart_data.append({
+            'id': item.id,
+            'product_name': item.product_variant.product.name,
+            'color': item.product_variant.color.color_name,
+            'size': item.product_variant.size.size_name,
+            'price': item.product_variant.price,
+            'quantity': item.quantity,
+            'total_price': item.total_price(),
+            'image_url': image.image_url.url if image else None,
+        })
+
+    total_price = sum(item['total_price'] for item in cart_data)
+    return render(request, 'user/cart.html', {'cart_items': cart_data, 'total_price': total_price})
+
+
+
+def update_cart(request, cart_item_id):
+    cart_item = get_object_or_404(Cart, id=cart_item_id, user=request.user)
+    if request.method == 'POST':
+        quantity = int(request.POST.get('quantity', 1))
+        if quantity > 0 and quantity <= cart_item.product_variant.stock_quantity:
+            cart_item.quantity = quantity
+            cart_item.save()
+    return redirect('cart_view')
+
+
+def remove_from_cart(request, cart_item_id):
+    cart_item = get_object_or_404(Cart, id=cart_item_id, user=request.user)
+    cart_item.delete()
+    messages.success(request, "Item removed from the cart.")
+    return redirect('cart_view')

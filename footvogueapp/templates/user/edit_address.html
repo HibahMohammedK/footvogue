@@ -1,0 +1,73 @@
+{% extends "user/profile.html" %}
+{% block content %}
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .form-container {
+            max-width: 600px;
+            margin: 0px auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .form-title {
+            font-size: 26px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .btn-primary {
+            width: 100%;
+            border-radius: 5px;
+        }
+        .form-label {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <h1 class="form-title">Edit Address</h1>
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="address_line1" class="form-label">Address Line 1</label>
+                    <input type="text" name="address_line1" id="address_line1" class="form-control" placeholder="Enter your address" value="{{ form.address_line1.value }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="address_line2" class="form-label">Address Line 2</label>
+                    <input type="text" name="address_line2" id="address_line2" class="form-control" placeholder="Apartment, suite, etc. (optional)" value="{{ form.address_line2.value }}">
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="city" class="form-label">City</label>
+                        <input type="text" name="city" id="city" class="form-control" placeholder="Enter your city" value="{{ form.city.value }}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="state" class="form-label">State</label>
+                        <input type="text" name="state" id="state" class="form-control" placeholder="Enter your state" value="{{ form.state.value }}" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="postal_code" class="form-label">Zip Code</label>
+                        <input type="text" name="postal_code" id="postal_code" class="form-control" placeholder="Enter your zip code" value="{{ form.postal_code.value }}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="country" class="form-label">Country</label>
+                        <input type="text" name="country" id="country" class="form-control" placeholder="Enter your country" value="{{ form.country.value }}" required>
+                    </div>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" name="is_default" id="is_default" class="form-check-input" {% if form.is_default.value %}checked{% endif %}>
+                    <label for="is_default" class="form-check-label">Set as Default Address</label>
+                </div>
+                <button type="submit" class="btn btn-outline-primary">Update Address</button>
+            </form>
+        </div>
+    </div>
+{% endblock %}

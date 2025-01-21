@@ -84,9 +84,9 @@ class ProductImage(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         img = Image.open(self.image_url.path)
-        if img.height > 600 or img.width > 600:
-            img = img.resize((600, 600), Image.Resampling.LANCZOS) 
-            img.save(self.image_url.path)
+        max_size = (600, 600)
+        img.thumbnail(max_size, Image.Resampling.LANCZOS)
+        img.save(self.image_url.path)
 
 
 class ProductVariant(models.Model):
@@ -128,3 +128,82 @@ class Rating(models.Model):
 
     def __str__(self):
         return f'Rating {self.rating} by {self.user} for {self.product}'
+    
+
+class Address(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="addresses")
+    address_line1 = models.CharField(max_length=255)
+    address_line2 = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100)
+    postal_code = models.CharField(max_length=20)
+    country = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_default = models.BooleanField(default=False)  # New field to mark default address
+
+    def __str__(self):
+        return f"{self.address_line1}, {self.city}, {self.state}, {self.country}"
+
+    class Meta:
+        verbose_name_plural = "Addresses"
+
+    def save(self, *args, **kwargs):
+        # Ensure only one default address per user
+        if self.is_default:
+            Address.objects.filter(user=self.user).update(is_default=False)
+        super(Address, self).save(*args, **kwargs)
+
+
+class Order(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    order_date = models.DateTimeField(auto_now_add=True)
+    shipping_address = models.ForeignKey(Address, on_delete=models.CASCADE)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('Pending', 'Pending'),
+            ('Processing', 'Processing'),
+            ('Shipped', 'Shipped'),
+            ('Cancelled', 'Cancelled'),
+            ('Completed', 'Completed'),
+        ],
+        default='Pending',
+    )
+
+    def __str__(self):
+        return f"Order #{self.id} - {self.status}"
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Item for Order #{self.order.id}"
+    
+class Cart(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    product_variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+    added_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Cart Item - {self.product_variant.product.name} for {self.user.username}"
+
+    def total_price(self):
+        return self.product_variant.price * self.quantity
+
+    def save(self, *args, **kwargs):
+        # Ensure that quantity is not more than the available stock
+        if self.quantity > self.product_variant.stock_quantity:
+            self.quantity = self.product_variant.stock_quantity
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def get_user_cart(user):
+        return Cart.objects.filter(user=user)

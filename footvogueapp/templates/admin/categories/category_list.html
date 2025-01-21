@@ -1,226 +1,85 @@
-
 {% extends "admin/admin_dash.html" %}
-{% load static %}
+
 {% block content %}
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">Category Management</h2>
+        <a href="{% url 'add_category' %}" class="btn btn-primary">+ Add Category</a>
+    </div>
 
-
-
-<!-- SECTION -->
-<div class="section">
-    <!-- container -->
-    <div class="container">
-        <!-- row -->
-        <div class="row">
-            <!-- ASIDE -->
-            <div id="aside" class="col-md-3">
-                <!-- aside Widget -->
-                <div class="aside">
-                    <h3 class="aside-title">Categories</h3>
-                    <div class="checkbox-filter">
-
-                        <div class="input-checkbox">
-                            <input type="checkbox" id="category-1">
-                            <label for="category-1">
-                                <span></span>
-                               Sports
-                                <small>(120)</small>
-                            </label>
-                        </div>
-
-                        <div class="input-checkbox">
-                            <input type="checkbox" id="category-2">
-                            <label for="category-2">
-                                <span></span>
-                                Casuals
-                                <small>(740)</small>
-                            </label>
-                        </div>
-
-                        <div class="input-checkbox">
-                            <input type="checkbox" id="category-3">
-                            <label for="category-3">
-                                <span></span>
-                                Formals
-                                <small>(1450)</small>
-                            </label>
-                        </div>
-
-                        <div class="input-checkbox">
-                            <input type="checkbox" id="category-4">
-                            <label for="category-4">
-                                <span></span>
-                                Men
-                                <small>(578)</small>
-                            </label>
-                        </div>
-
-                        <div class="input-checkbox">
-                            <input type="checkbox" id="category-5">
-                            <label for="category-5">
-                                <span></span>
-                                Women
-                                <small>(120)</small>
-                            </label>
-                        </div>
-
-                        <div class="input-checkbox">
-                            <input type="checkbox" id="category-6">
-                            <label for="category-6">
-                                <span></span>
-                                Kids
-                                <small>(740)</small>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <!-- /aside Widget -->
-
-                <!-- aside Widget -->
-                <div class="aside">
-                    <h3 class="aside-title">Price</h3>
-                    <div class="price-filter">
-                        <div id="price-slider"></div>
-                        <div class="input-number price-min">
-                            <input id="price-min" type="number">
-                            <span class="qty-up">+</span>
-                            <span class="qty-down">-</span>
-                        </div>
-                        <span>-</span>
-                        <div class="input-number price-max">
-                            <input id="price-max" type="number">
-                            <span class="qty-up">+</span>
-                            <span class="qty-down">-</span>
-                        </div>
-                    </div>
-                </div>
-                <!-- /aside Widget -->
-
-              
-              
-
-                <!-- aside Widget -->
-                <div class="aside">
-                    <h3 class="aside-title">Top selling</h3>
-                    <div class="product-widget">
-                        <div class="product-img">
-                            <img src="{% static 'img/product01.png' %}" alt="">
-                        </div>
-                        <div class="product-body">
-                            <p class="product-category">Category</p>
-                            <h3 class="product-name"><a href="#">product name goes here</a></h3>
-                            <h4 class="product-price">$980.00 <del class="product-old-price">$990.00</del></h4>
-                        </div>
-                    </div>
-
-                    <div class="product-widget">
-                        <div class="product-img">
-                            <img src="{% static 'img/product02.png' %}" alt="">
-                        </div>
-                        <div class="product-body">
-                            <p class="product-category">Category</p>
-                            <h3 class="product-name"><a href="#">product name goes here</a></h3>
-                            <h4 class="product-price">$980.00 <del class="product-old-price">$990.00</del></h4>
-                        </div>
-                    </div>
-
-                    <div class="product-widget">
-                        <div class="product-img">
-                            <img src="{% static 'img/product03.png' %}" alt="">
-                        </div>
-                        <div class="product-body">
-                            <p class="product-category">Category</p>
-                            <h3 class="product-name"><a href="#">product name goes here</a></h3>
-                            <h4 class="product-price">$980.00 <del class="product-old-price">$990.00</del></h4>
-                        </div>
-                    </div>
-                </div>
-                <!-- /aside Widget -->
-            </div>
-            <!-- /ASIDE -->
-
-            <!-- STORE -->
-            <div id="store" class="col-md-9">
-                <!-- store top filter -->
-                <div class="store-filter clearfix">
-                    <div class="store-sort">
-                        <label>
-                            Sort By:
-                            <select class="input-select">
-                                <option value="0">Popular</option>
-                                <option value="1">Position</option>
-                            </select>
-                        </label>
-
-                        <label>
-                            Show:
-                            <select class="input-select">
-                                <option value="0">20</option>
-                                <option value="1">50</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="store-grid">
-                        <a href="{% url 'add_category' %}" class="btn btn-danger" id="add-category-button">Add Category</a>
-                    </div>
-                    
-                </div>
-                <!-- /store top filter -->
-
-                
-                <!-- Search Bar -->
-                <div class="search-bar mb-3">
-                    <input type="text" id="category-search" class="form-control" placeholder="Search Categories..." onkeyup="filterCategories()">
-                </div>
-
-                <!-- Category Table -->
-                <div class="table-responsive">
-                    <h2 class="text-center">Category List</h2>
-                    <table class="table table-bordered">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Category Name</th>
-                                <th>Parent Category</th>
-                                <th>Date Added</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="category-table-body">
-                            {% for category in categories %}
-                            <tr>
-                                <td>{{ category.id }}</td>
-                                <td>{{ category.category_name }}</td>
-                                <td>{{ category.parent_category }}</td>
-                                <td>{{ category.created_at }}</td>
-                                <td>
-                                    <a href="{% url 'edit_category' category.id %}" class="btn btn-warning btn-sm">Edit</a>
-                                    <a href="{% url 'delete_category' category.id %}" class="btn btn-danger btn-sm">Delete</a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <!-- /STORE -->
+    <!-- Top Filters -->
+    <div class="store-filter clearfix mb-4">
+        <div class="store-sort d-flex gap-3 align-items-center">
+            <label>
+                Sort By:
+                <select class="form-select">
+                    <option value="0">Popular</option>
+                    <option value="1">Position</option>
+                </select>
+            </label>
+            <label>
+                Filter:
+                <select class="form-select">
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                </select>
+            </label>
         </div>
     </div>
-</div>
 
-<!-- Add JavaScript for table filtering -->
+    <!-- Search Bar -->
+    <div class="search-bar mb-4">
+        <input type="text" id="category-search" class="form-control" placeholder="Search Categories..." onkeyup="filterCategories()">
+    </div>
+
+    <!-- Category Table -->
+    <div class="table-responsive">
+        <h3 class="text-center mb-4">Category List</h3>
+        <table class="table table-striped table-hover table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Category Name</th>
+                    <th>Parent Category</th>
+                    <th>Date Added</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="category-table-body">
+                {% for category in categories %}
+                <tr>
+                    <td>{{ category.id }}</td>
+                    <td>{{ category.category_name }}</td>
+                    <td>{{ category.parent_category }}</td>
+                    <td>{{ category.created_at }}</td>
+                    <td>
+                        <a href="{% url 'edit_category' category.id %}" class="btn btn-warning btn-sm">Edit</a>
+                        <a href="{% url 'delete_category' category.id %}" class="btn btn-danger btn-sm">Delete</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center">No categories found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+
+<!-- JavaScript for Table Filtering -->
 <script>
     function filterCategories() {
         var input, filter, table, tr, td, i, txtValue;
         input = document.getElementById("category-search");
-        filter = input.value.toLowerCase(); // Convert the search term to lowercase for case-insensitive matching
+        filter = input.value.toLowerCase();
         table = document.querySelector(".table");
         tr = table.getElementsByTagName("tr");
 
-        for (i = 1; i < tr.length; i++) { // Start from 1 to skip the header row
-            td = tr[i].getElementsByTagName("td")[1]; // Column with category name (index 1)
+        for (i = 1; i < tr.length; i++) {
+            td = tr[i].getElementsByTagName("td")[1];
             if (td) {
-                txtValue = td.textContent || td.innerText; // Get the category name text
-                // Check if the category name starts with the filter text (ignoring case)
+                txtValue = td.textContent || td.innerText;
                 if (txtValue.toLowerCase().startsWith(filter)) {
                     tr[i].style.display = "";
                 } else {
@@ -230,32 +89,4 @@
         }
     }
 </script>
-
-
 {% endblock %}
-
-
-<!-- 
-
-
-<body>
-    <h1>Category List</h1>
-    <a href="{% url 'add_category' %}">Add Category</a>
-    <table>
-        <tr>
-            <th>Category Name</th>
-            <th>Parent Category</th>
-            <th>Actions</th>
-        </tr>
-        {% for category in categories %}
-        <tr>
-            <td>{{ category.category_name }}</td>
-            <td>{{ category.parent_category }}</td>
-            <td>
-                <a href="{% url 'edit_category' category.id %}">Edit</a>
-                <a href="{% url 'delete_category' category.id %}">Delete</a>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</body>  -->

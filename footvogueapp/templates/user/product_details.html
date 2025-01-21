@@ -114,18 +114,27 @@
                                 </label>
                             </div>
 
-                            <!-- Add to Cart -->
+                         <!-- Add to Cart -->
                             <div class="add-to-cart">
                                 <div class="qty-label">
                                     Qty
                                     <div class="input-number">
-                                        <input type="number" value="1" min="1">
+                                        <input type="number" id="qty" name="quantity" value="1" min="1">
                                         <span class="qty-up">+</span>
                                         <span class="qty-down">-</span>
                                     </div>
                                 </div>
-                                <button class="add-to-cart-btn"><i class="fa fa-shopping-cart"></i> Add to Cart</button>
+                                <!-- Form for adding item to cart -->
+                                <form action="{% url 'add_to_cart' selected_variant.id %}" method="POST">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="variant_id" value="{{ selected_variant.id }}">
+                                    <button type="submit" class="add-to-cart-btn">
+                                        <i class="fa fa-shopping-cart"></i> Add to Cart
+                                    </button>
+                                </form>
                             </div>
+
+
 
                             <!-- Wishlist and Categories -->
                             <ul class="product-btns">

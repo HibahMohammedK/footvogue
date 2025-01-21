@@ -44,7 +44,14 @@
                     <a href="{% provider_login_url 'google' %}" class="btn btn-google">
                         Register with Google
                     </a>
-                    
+                     <!-- Messages -->
+                     {% if messages %}
+                     <div class="mt-3 text-center">
+                         {% for message in messages %}
+                         <p style="color: red;">{{ message }}</p>
+                         {% endfor %}
+                     </div>
+                     {% endif %}
 
 
                     <!-- Login link -->
