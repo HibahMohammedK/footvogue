@@ -140,7 +140,7 @@ textarea.input {
 }
 
 .input-number input[type="number"] {
-  /* -moz-appearance: textfield; */
+  -moz-appearance: textfield;
   height: 40px;
   width: 100%;
   border: 1px solid #E4E7ED;

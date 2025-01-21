@@ -59,7 +59,7 @@
 					<ul class="header-links pull-right">
 						<li><a href="#"><i class="fa fa-dollar"></i> USD</a></li>
 						{% if user.is_authenticated %}
-							<li><a href="#"><i class="fa fa-user-o"></i>{{ user.get_full_name|default:user.username }}
+							<li><a href="{% url 'profile' %}"><i class="fa fa-user-o"></i>{{ user.get_full_name|default:user.username }}
 							</a></li>
 							<li><a href="{% url 'logout' %}"><i class="fa fa-sign-out"></i> Logout</a></li>
 						{% else %}
@@ -122,41 +122,47 @@
 									<a class="dropdown-toggle" data-toggle="dropdown" aria-expanded="true">
 										<i class="fa fa-shopping-cart"></i>
 										<span>Your Cart</span>
-										<div class="qty">3</div>
+										<div class="qty">{{ cart_items|length }}</div> <!-- Dynamic cart count -->
 									</a>
 									<div class="cart-dropdown">
 										<div class="cart-list">
+											{% for cart_item in cart_items %}
 											<div class="product-widget">
 												<div class="product-img">
-													<img src="{% static 'img/product01.png' %}" alt="">
+													{% if cart_item.image_url %}
+														<img src="{{ cart_item.image_url }}" alt="{{ cart_item.product_variant.product.name }}">
+													{% else %}
+														<img src="{% static 'images/placeholder.png' %}" alt="No image available">
+													{% endif %}
 												</div>
+												
 												<div class="product-body">
-													<h3 class="product-name"><a href="#">product name goes here</a></h3>
-													<h4 class="product-price"><span class="qty">1x</span>$980.00</h4>
+													<h3 class="product-name">
+														<a href="#">{{ cart_item.product_variant.product.name }}</a>
+													</h3>
+													<h4 class="product-price">
+														<span class="qty">{{ cart_item.quantity }}x</span> 
+														${{ cart_item.product_variant.price|floatformat:2 }}
+													</h4>
 												</div>
-												<button class="delete"><i class="fa fa-close"></i></button>
+												<form action="{% url 'remove_from_cart' cart_item.id %}" method="POST">
+													{% csrf_token %}
+													<button type="submit" class="delete">
+														<i class="fa fa-close"></i>
+													</button>
+												</form>
 											</div>
-
-											<div class="product-widget">
-												<div class="product-img">
-													<img src="{% static 'img/product02.png' %}" alt="">
-												</div>
-												<div class="product-body">
-													<h3 class="product-name"><a href="#">product name goes here</a></h3>
-													<h4 class="product-price"><span class="qty">3x</span>$980.00</h4>
-												</div>
-												<button class="delete"><i class="fa fa-close"></i></button>
-											</div>
-										</div>
+											{% endfor %}
+										</div>										
 										<div class="cart-summary">
-											<small>3 Item(s) selected</small>
-											<h5>SUBTOTAL: $2940.00</h5>
+											<small>{{ cart_items.count }} Item(s) selected</small>
+											<h5>SUBTOTAL: ${{ total_price|floatformat:2 }}</h5>
 										</div>
 										<div class="cart-btns">
-											<a href="#">View Cart</a>
-											<a href="#">Checkout  <i class="fa fa-arrow-circle-right"></i></a>
+											<a href="{% url 'cart_view' %}">View Cart</a>
+											<a href="#">Checkout <i class="fa fa-arrow-circle-right"></i></a>
 										</div>
-									</div>
+									</div>									
 								</div>
 								<!-- /Cart -->
 
@@ -203,6 +209,7 @@
 			<!-- /container -->
 		</nav>
 		<!-- /NAVIGATION -->
+<main>
 {% block content %}
 		<!-- SECTION -->
 		<div class="section">
@@ -331,7 +338,7 @@
 												<button class="add-to-cart-btn"><i class="fa fa-shopping-cart"></i> add to cart</button>
 											</div>
 										</div>
-										{% endfor %}
+										{% endfor %} 
 									</div>
 									<div id="slick-nav-1" class="products-slick-nav"></div>
 								</div>
@@ -910,7 +917,8 @@
 			<!-- /container -->
 		</div>
 		<!-- /NEWSLETTER -->
-{% endblock %}
+		{% endblock %}
+	</main>
 		<!-- FOOTER -->
 		<footer id="footer">
 			<!-- top footer -->

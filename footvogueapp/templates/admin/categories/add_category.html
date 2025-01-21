@@ -1,88 +1,85 @@
 {% extends "admin/admin_dash.html" %}
 
 {% block content %}
-<!-- Add Category Form -->
-
-<div class="container my-5" style="min-height: 80vh;"> <!-- Ensure the content height is large enough to push footer down -->
-    <!-- Heading -->
-    <h2 class="text-center mb-4">Add Category</h2>
-
-    <!-- Category Add Form -->
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <form method="post" class="p-4 border rounded shadow-sm bg-light">
+<div class="container-fluid px-4 py-5">
+    <div class="card shadow-sm">
+        <div class="card-header  text-white">
+            <h2 class="mb-0">Add New Category</h2>
+        </div>
+        <div class="card-body">
+            <form method="post">
                 {% csrf_token %}
                 
                 <!-- Category Name -->
-                <div class="form-group mb-3">
-                    <label for="category_name">Category Name</label>
-                    <input class="form-control" type="text" id="category_name" name="category_name" placeholder="Enter category name" required>
+                <div class="mb-3">
+                    <label for="category_name" class="form-label fw-bold">Category Name</label>
+                    <input type="text" id="category_name" name="category_name" 
+                           class="form-control" placeholder="Enter category name" required>
                 </div>
-
-               <!-- Parent Category (Dropdown) -->
-                <div class="form-group mb-3">
-                    <label for="parent_category">Parent Category</label>
-                    <select class="form-control" id="parent_category" name="parent_category">
+                
+                <!-- Parent Category Dropdown -->
+                <div class="mb-3">
+                    <label for="parent_category" class="form-label fw-bold">Parent Category</label>
+                    <select id="parent_category" name="parent_category" class="form-control">
                         <option value="">Select Parent Category</option>
-                        <option value="">women</option>
-                        <option value="">men</option>
-                        <option value="">kids</option>
+                        <option value="women">Women</option>
+                        <option value="men">Men</option>
+                        <option value="kids">Kids</option>
                         {% for category in categories %}
                             <option value="{{ category.id }}">{{ category.category_name }}</option>
                         {% endfor %}
                     </select>
                 </div>
-
-
+                
                 <!-- Submit Button -->
-                <div class="form-group text-center">
-                    <button type="submit" class="btn btn-danger btn-block">Add Category</button>
+                <div class="text-center">
+                    <button type="submit" class="btn btn-primary px-5">Add Category</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 <style>
-    /* Push footer down */
-    body {
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
+    /* Ensure responsiveness and fit */
+    .container-fluid {
+        max-width: 1200px;
+        margin: 0 auto;
     }
 
-    .container {
-        flex-grow: 1;  /* This allows the content area to expand and push the footer to the bottom */
-    }
-
-    footer {
-        margin-top: auto; /* Ensure the footer stays at the bottom of the page */
-    }
-
-    /* Style adjustments */
-    form {
-        background-color: #f8f9fa;
-        padding: 30px;
+    .card {
         border-radius: 8px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
 
-    .form-group label {
-        font-weight: bold;
+    .card-header {
+        border-bottom: 1px solid #ddd;
     }
 
-    .form-control {
+    label {
+        font-size: 15px;
+        color: #495057;
+    }
+
+    input, select {
+        font-size: 14px;
+        padding: 8px;
         border-radius: 5px;
-        box-shadow: none;
-        font-size: 16px;
+        border: 1px solid #ced4da;
     }
 
-    .btn-danger {
-        padding: 10px 20px;
-        font-size: 16px;
-        border-radius: 5px;
-        width: 100%;
+    input:focus, select:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 5px rgba(0, 123, 255, 0.25);
+    }
+
+    .btn-primary {
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+
+    .btn-primary:hover {
+        background-color: #0056b3;
+        border-color: #0056b3;
     }
 </style>

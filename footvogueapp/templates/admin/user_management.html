@@ -1,10 +1,11 @@
 {% extends "admin/admin_dash.html" %}
 
 {% block content %}
-
-    <div class="container mt-4">
-        <h2 class="mb-4">User Management</h2>
-
+<div class="card mt-4">
+    <div class="card-header  text-white">
+        <h2>User Management</h2>
+    </div>
+    <div class="card-body">
         <!-- Search Form -->
         <form method="get" action="{% url 'user_management' %}" class="mb-4">
             <div class="form-row">
@@ -19,7 +20,7 @@
 
         <!-- User Table -->
         <table class="table table-bordered">
-            <thead>
+            <thead class="thead-dark">
                 <tr>
                     <th>ID</th>
                     <th>Username</th>
@@ -57,5 +58,5 @@
             </tbody>
         </table>
     </div>
-
-{% endblock%}
+</div>
+{% endblock %}
