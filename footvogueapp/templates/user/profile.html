@@ -97,6 +97,15 @@
             width: 100%;
             bottom: 0;
         }
+        .header-links a, .header-ctn a {
+            text-decoration: none;
+        }
+
+        .header-links a:hover {
+            text-decoration: none;
+            color: #dc3545; /* Optional: Change color on hover */
+        }
+
     </style>
 </head>
 <body>
@@ -262,6 +271,14 @@
                     <!-- My Details Tab -->
                     <div class="tab-pane fade {% if request.GET.tab == 'details' or not request.GET.tab %}show active{% endif %}" id="details">
                         {% block content %}
+                         <!-- Messages -->
+                         {% if messages %}
+                         <div class="mt-3 text-center">
+                             {% for message in messages %}
+                             <p style="color: red;">{{ message }}</p>
+                             {% endfor %}
+                         </div>
+                         {% endif %}
                         <h5>My Details</h5>
                         <p><strong>Name:</strong> {{ user.name|default:user.username }}</p>
                         <p><strong>Email:</strong> {{ user.email }}</p>
@@ -273,6 +290,14 @@
                     <!-- My Address Book Tab -->
                     <div class="tab-pane fade {% if request.GET.tab == 'addresses' %}show active{% endif %}" id="addresses">
                         <h5>My Address Book</h5>
+                         <!-- Messages -->
+                         {% if messages %}
+                         <div class="mt-3 text-center">
+                             {% for message in messages %}
+                             <p style="color: red;">{{ message }}</p>
+                             {% endfor %}
+                         </div>
+                         {% endif %}
                         {% if addresses %}
                             <ul class="list-group">
                                 {% for address in addresses %}
@@ -302,13 +327,55 @@
                     </div>
 
                     <!-- My Orders Tab -->
-                    <div class="tab-pane fade {% if request.GET.tab == 'orders' %}show active{% endif %}" id="orders">
+                    <div class="tab-pane fade {% if active_tab == 'orders' %}show active{% endif %}" id="orders">
                         <h5>My Orders</h5>
+                         <!-- Messages -->
+                         {% if messages %}
+                         <div class="mt-3 text-center">
+                             {% for message in messages %}
+                             <p style="color: red;">{{ message }}</p>
+                             {% endfor %}
+                         </div>
+                         {% endif %}
                         {% if orders %}
                             <ul class="list-group">
                                 {% for order in orders %}
                                     <li class="list-group-item">
-                                        Order #{{ order.id }} - Status: {{ order.status }}
+                                        <h6>Order #{{ order.id }}</h6>
+                                        <p><strong>Status:</strong> {{ order.status }}</p>
+                                        <p><strong>Total Amount:</strong> ${{ order.total_amount|floatformat:2 }}</p>
+                    
+                                        <div class="order-items">
+                                            {% for item in order.items %}
+                                                 <div class="order-item d-flex align-items-center mb-3">
+                                                <!-- Product Image -->
+                                                    <div class="order-item-image">
+                                                        {% if item.product_image %}
+                                                            <img src="{{ item.product_image }}" alt="{{ item.product_name }}" style="max-width: 100px;">
+                                                        {% else %}
+                                                            <img src="{% static 'images/placeholder.png' %}" alt="No image available" style="max-width: 100px;">
+                                                        {% endif %}
+                                                    </div>
+                                
+                                                    <!-- Product Details -->
+                                                    <div class="order-item-details ml-3">
+                                                        <p><strong>{{ item.product_name }}</strong></p>
+                                                        <p>{{ item.color }} - {{ item.size }}</p>
+                                                        <p>Quantity: {{ item.quantity }}</p>
+                                                        <p>Price: ${{ item.price|floatformat:2 }}</p>
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                       <!-- Cancel Order Button -->
+                                        {% if order.status != 'Cancelled' and order.status != 'Completed' and order.status != 'Delivered' %}
+                                        <form method="POST" action="{% url 'profile' %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="order_id" value="{{ order.id }}">
+                                            <button type="submit" name="cancel_order" class="btn btn-danger btn-sm">Cancel Order</button>
+                                        </form>
+                                        {% endif %}
+
                                     </li>
                                 {% endfor %}
                             </ul>
@@ -317,12 +384,21 @@
                         {% endif %}
                     </div>
 
+                    
                     <!-- Account Settings Tab -->
                     <div class="tab-pane fade {% if request.GET.tab == 'settings' %}show active{% endif %}" id="settings">
                         <h5>Account Settings</h5>
                         <p>Manage your account settings, privacy, and security options here.</p>
                         <a href="{% url 'change_password' %}" class="btn btn-outline-primary">Change Password</a>
                         <a href="{% url 'password_reset' %}" class="btn btn-outline-primary">Forgot your password?</a>
+                        <!-- Messages -->
+                        {% if messages %}
+                        <div class="mt-3 text-center">
+                            {% for message in messages %}
+                            <p style="color: red;">{{ message }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
 
                     </div>
                 </div>

@@ -1,0 +1,178 @@
+{% extends "user/home.html" %}
+{% load static %}
+{% block content %}
+<!-- SECTION -->
+<div class="section">
+    {% if messages %}
+        <div class="mt-3 text-center">
+            {% for message in messages %}
+            <p style="color: red;">{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+  
+    <div class="container">
+        <div class="row">
+            <!-- Billing Address -->
+            <div class="col-md-7">
+                <div class="billing-details">
+                    <div class="section-title">
+                        <h3 class="title">Billing Address</h3>
+                    </div>
+
+                    <!-- Address Selection (Existing Addresses) -->
+                    <form method="POST" action="{% url 'checkout' %}">
+                        {% csrf_token %}
+                        
+                        <div class="form-group">
+                            <label for="address_select">Select an Address</label>
+                            <select class="input" name="address_select" id="address_select" onchange="fillAddressFields()">
+                                <option value="" disabled selected>Select an Address</option>
+                                {% for address in user.addresses.all %}
+                                    <option value="{{ address.id }}" 
+                                        data-line1="{{ address.address_line1 }}" 
+                                        data-line2="{{ address.address_line2 }}" 
+                                        data-city="{{ address.city }}" 
+                                        data-state="{{ address.state }}" 
+                                        data-postal="{{ address.postal_code }}" 
+                                        data-country="{{ address.country }}">
+                                        {{ address.address_line1 }}, {{ address.city }}
+                                    </option>
+                                {% empty %}
+                                    <option value="" disabled>No saved addresses available</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- New Address Form (Hidden if an address is selected) -->
+                        <div class="form-group">
+                            <label for="address_line1">Address Line 1</label>
+                            <input class="input" type="text" name="address_line1" id="address_line1" placeholder="Address Line 1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="address_line2">Address Line 2</label>
+                            <input class="input" type="text" name="address_line2" id="address_line2" placeholder="Address Line 2 (Optional)">
+                        </div>
+                        <div class="form-group">
+                            <label for="city">City</label>
+                            <input class="input" type="text" name="city" id="city" placeholder="City" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="state">State</label>
+                            <input class="input" type="text" name="state" id="state" placeholder="State" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="postal_code">Postal Code</label>
+                            <input class="input" type="text" name="postal_code" id="postal_code" placeholder="Postal Code" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="country">Country</label>
+                            <input class="input" type="text" name="country" id="country" placeholder="Country" required>
+                        </div>
+
+                        <div class="form-group">
+                            <input type="checkbox" name="use_default" id="use_default" value="true">
+                            <label for="use_default">Use as Default Address</label>
+                        </div>
+
+                        <button type="submit" class="primary-btn">Save Address & continue shopping</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Order Summary -->
+            <div class="col-md-5 order-details">
+                <div class="section-title text-center">
+                    <h3 class="title">Your Order</h3>
+                </div>
+                <div class="order-summary">
+                    <div class="order-col">
+                        <div><strong>PRODUCT</strong></div>
+                        <div><strong>TOTAL</strong></div>
+                    </div>
+                    <div class="order-products">
+                        {% for item in cart_items %}
+                        <div class="order-col d-flex align-items-center">
+                            <div class="cart-item-image">
+                                {% if item.image_url %}
+                                    <img src="{{ item.image_url }}" alt="{{ item.product_name }}">
+                                {% else %}
+                                    <img src="{% static 'images/placeholder.png' %}" alt="No image available">
+                                {% endif %}
+                            </div>
+                            <div>{{ item.quantity }}x {{ item.product_variant.product.name }}</div>
+                            <div>${{ item.total_price|floatformat:2 }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="order-col">
+                        <div>Shipping</div>
+                        <div><strong>FREE</strong></div>
+                    </div>
+                    <div class="order-col">
+                        <div><strong>TOTAL</strong></div>
+                        <div><strong class="order-total">${{ total_price|floatformat:2 }}</strong></div>
+                    </div>
+                </div>
+                <form method="POST" action="{% url 'place_order' %}">
+                    {% csrf_token %}
+                    <div class="payment-method">
+                        <div class="input-radio">
+                            <input type="radio" name="payment_method" id="payment-1" value="bank_transfer" required>
+                            <label for="payment-1"><span></span>Bank Transfer</label>
+                        </div>
+                        <div class="input-radio">
+                            <input type="radio" name="payment_method" id="payment-2" value="cheque">
+                            <label for="payment-2"><span></span>Cheque Payment</label>
+                        </div>
+                        <div class="input-radio">
+                            <input type="radio" name="payment_method" id="payment-3" value="paypal">
+                            <label for="payment-3"><span></span>PayPal</label>
+                        </div>
+                        <div class="input-radio">
+                            <input type="radio" name="payment_method" id="payment-4" value="cod">
+                            <label for="payment-4"><span></span>Cash on Delivery</label>
+                        </div>
+                    </div>
+                    <div class="input-checkbox">
+                        <input type="checkbox" id="terms" required>
+                        <label for="terms"><span></span>I've read and accept the <a href="#">terms & conditions</a></label>
+                    </div>
+                    <button type="submit" class="primary-btn order-submit">Place Order</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .cart-item-image img {
+        max-width: 60px;
+        max-height: 60px;
+        object-fit: cover;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .order-col {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+</style>
+
+<script>
+    function fillAddressFields() {
+        const select = document.getElementById("address_select");
+        const selectedOption = select.options[select.selectedIndex];
+        if (selectedOption.value) {
+            document.getElementById("address_line1").value = selectedOption.getAttribute("data-line1");
+            document.getElementById("address_line2").value = selectedOption.getAttribute("data-line2");
+            document.getElementById("city").value = selectedOption.getAttribute("data-city");
+            document.getElementById("state").value = selectedOption.getAttribute("data-state");
+            document.getElementById("postal_code").value = selectedOption.getAttribute("data-postal");
+            document.getElementById("country").value = selectedOption.getAttribute("data-country");
+        }
+    }
+</script>
+{% endblock %}

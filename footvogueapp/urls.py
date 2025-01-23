@@ -17,8 +17,6 @@ urlpatterns = [
     path('product/<int:product_id>/variant/<int:variant_id>/', views.product_details, name='product_details_variant'),
     path('product/<int:product_id>/submit_review_and_rating/', views.submit_review_and_rating, name='submit_review_and_rating'),
 
-    
-    
     ### admin urls ####
 
     path('admin_dash/', views.admin_dash, name='admin_dash'),
@@ -53,6 +51,11 @@ urlpatterns = [
     path('cart/', views.cart_view, name='cart_view'),
     path('cart/update/<int:cart_item_id>/', views.update_cart, name='update_cart'),
     path('cart/remove/<int:cart_item_id>/', views.remove_from_cart, name='remove_from_cart'),
+
+    path('checkout/', views.checkout, name='checkout'),
+    path('place_order/', views.place_order, name='place_order'),
+    path('order_summary/<int:order_id>/', views.order_summary, name='order_summary'),
+    path("cancel-order/<int:order_id>/", views.cancel_order, name="cancel_order"),
    
 
 

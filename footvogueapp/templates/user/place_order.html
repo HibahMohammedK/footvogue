@@ -1,0 +1,161 @@
+{% extends "user/home.html" %}
+{% block content %}
+<!-- SECTION -->
+<div class="section">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-7">
+                <!-- Billing Details -->
+                <div class="billing-details">
+                    <div class="section-title">
+                        <h3 class="title">Billing Address</h3>
+                    </div>
+                    <form method="POST" action="{% url 'place_order' %}">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <input class="input" type="text" name="first_name" value="{{ shipping_address.user.first_name }}" placeholder="First Name" disabled>
+                        </div>
+                        <div class="form-group">
+                            <input class="input" type="text" name="last_name" value="{{ shipping_address.user.last_name }}" placeholder="Last Name" disabled>
+                        </div>
+                        <div class="form-group">
+                            <input class="input" type="email" name="email" value="{{ shipping_address.user.email }}" placeholder="Email" disabled>
+                        </div>
+                        <div class="form-group">
+                            <input class="input" type="text" name="address" value="{{ shipping_address.address_line1 }}" placeholder="Address" disabled>
+                        </div>
+                        <div class="form-group">
+                            <input class="input" type="text" name="city" value="{{ shipping_address.city }}" placeholder="City" disabled>
+                        </div>
+                        <div class="form-group">
+                            <input class="input" type="text" name="state" value="{{ shipping_address.state }}" placeholder="State" disabled>
+                        </div>
+                        <div class="form-group">
+                            <input class="input" type="text" name="postal_code" value="{{ shipping_address.postal_code }}" placeholder="Postal Code" disabled>
+                        </div>
+                        <div class="form-group">
+                            <input class="input" type="text" name="country" value="{{ shipping_address.country }}" placeholder="Country" disabled>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Shipping Details (Optional) -->
+                <div class="shiping-details">
+                    <div class="section-title">
+                        <h3 class="title">Shipping Address</h3>
+                    </div>
+                    <div class="input-checkbox">
+                        <input type="checkbox" id="shiping-address" name="shiping_address">
+                        <label for="shiping-address">
+                            <span></span>
+                            Ship to a different address?
+                        </label>
+                        <div class="caption">
+                            <div class="form-group">
+                                <input class="input" type="text" name="shipping_first_name" placeholder="First Name">
+                            </div>
+                            <div class="form-group">
+                                <input class="input" type="text" name="shipping_last_name" placeholder="Last Name">
+                            </div>
+                            <div class="form-group">
+                                <input class="input" type="email" name="shipping_email" placeholder="Email">
+                            </div>
+                            <div class="form-group">
+                                <input class="input" type="text" name="shipping_address" placeholder="Address">
+                            </div>
+                            <div class="form-group">
+                                <input class="input" type="text" name="shipping_city" placeholder="City">
+                            </div>
+                            <div class="form-group">
+                                <input class="input" type="text" name="shipping_state" placeholder="State">
+                            </div>
+                            <div class="form-group">
+                                <input class="input" type="text" name="shipping_postal_code" placeholder="Postal Code">
+                            </div>
+                            <div class="form-group">
+                                <input class="input" type="text" name="shipping_country" placeholder="Country">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Methods -->
+                <div class="payment-method">
+                    <div class="section-title">
+                        <h3 class="title">Payment Method</h3>
+                    </div>
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-1" value="bank_transfer">
+                        <label for="payment-1">
+                            <span></span>
+                            Direct Bank Transfer
+                        </label>
+                    </div>
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-2" value="cheque">
+                        <label for="payment-2">
+                            <span></span>
+                            Cheque Payment
+                        </label>
+                    </div>
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-3" value="paypal">
+                        <label for="payment-3">
+                            <span></span>
+                            PayPal
+                        </label>
+                    </div>
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-cod" value="cod">
+                        <label for="payment-cod">
+                            <span></span>
+                            Cash on Delivery (COD)
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Terms and Conditions -->
+                <div class="input-checkbox">
+                    <input type="checkbox" id="terms" name="terms" required>
+                    <label for="terms">
+                        <span></span>
+                        I've read and accept the <a href="#">terms & conditions</a>
+                    </label>
+                </div>
+
+                <!-- Place Order Button -->
+                <button type="submit" class="primary-btn order-submit">Place Order</button>
+            </div>
+
+            <!-- Order Summary -->
+            <div class="col-md-5 order-details">
+                <div class="section-title text-center">
+                    <h3 class="title">Your Order</h3>
+                </div>
+                <div class="order-summary">
+                    <div class="order-col">
+                        <div><strong>PRODUCT</strong></div>
+                        <div><strong>TOTAL</strong></div>
+                    </div>
+                    <div class="order-products">
+                        {% for item in cart_items %}
+                        <div class="order-col">
+                            <div>{{ item.quantity }}x {{ item.product_variant.product.name }}</div>
+                            <div>${{ item.total_price }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="order-col">
+                        <div>Shipping</div>
+                        <div><strong>FREE</strong></div>
+                    </div>
+                    <div class="order-col">
+                        <div><strong>TOTAL</strong></div>
+                        <div><strong class="order-total">${{ total_price }}</strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

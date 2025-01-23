@@ -84,10 +84,18 @@
             <p><strong>Subtotal:</strong> ${{ total_price|floatformat:2 }}</p>
             <div class="checkout-btns">
                 <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
-                <a href="#" class="btn btn-success">Proceed to Checkout</a>
+                <a href="{% url 'checkout'%}" class="btn btn-success">Proceed to Checkout</a>
             </div>
         </div>
     </div>
+     <!-- Messages -->
+     {% if messages %}
+     <div class="mt-3 text-center">
+         {% for message in messages %}
+         <p style="color: red;">{{ message }}</p>
+         {% endfor %}
+     </div>
+     {% endif %}
     {% else %}
     <div class="empty-cart">
         <p>Your cart is empty.</p>
