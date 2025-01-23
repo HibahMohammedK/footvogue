@@ -15,6 +15,8 @@ from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
 from django.urls import reverse
 from django.http import HttpResponse
+from django.db import transaction
+from django.contrib.messages import success, error
 
 
    
@@ -471,6 +473,7 @@ def delete_product(request, pk):
     return redirect('view_products')
 
 
+
 #####   user products  #####
 
 
@@ -617,20 +620,68 @@ def submit_review_and_rating(request, product_id):
             'rating_form': RatingForm()  # Empty form
         })
     
- 
+
+
+
 @never_cache
 @login_required
 def profile(request):
     user = request.user
     addresses = Address.objects.filter(user=user)
-    orders = Order.objects.filter(user=user).order_by('-order_date')
+    orders = (
+        Order.objects.filter(user=user)
+        .prefetch_related('items__product_variant__product', 'items__product_variant__productimage_set')  
+        .order_by('-order_date')
+    )
     active_tab = request.GET.get('active_tab', 'details')  
+
+    # Handle order cancellation
+    if request.method == "POST" and 'cancel_order' in request.POST:
+        order_id = request.POST.get('order_id')
+        order = get_object_or_404(Order, id=order_id, user=user)
+
+        # Allow cancellation only for orders not yet delivered or already cancelled
+        if order.status not in ['Delivered', 'Cancelled', 'Completed']:
+            order.status = 'Cancelled'
+            order.save()
+            success(request, f"Order #{order.id} has been successfully cancelled.")
+        else:
+            error(request, f"Order #{order.id} cannot be cancelled.")
+        return redirect('profile')
+
+    # Prepare detailed order data
+    order_details = []
+    for order in orders:
+        items = []
+        for item in order.items.all():  # Use the correct related_name "items"
+            # Fetch the first image for the product variant
+            image = item.product_variant.productimage_set.first()
+            items.append({
+                'product_name': item.product_variant.product.name,  # Access product name via product_variant
+                'product_image': image.image_url.url if image else None,  # Access image if available
+                'color': item.product_variant.color.color_name,  # Access color name
+                'size': item.product_variant.size.size_name,  # Access size name
+                'quantity': item.quantity,
+                'price': item.price,
+                'total_price': item.price * item.quantity,
+            })
+        order_details.append({
+            'id': order.id,
+            'status': order.status,
+            'date': order.order_date,
+            'total_amount': order.total_amount,
+            'delivery_status': order.status,  # Use status for delivery
+            'items': items,
+        })
+
     return render(request, 'user/profile.html', {
         'user': user,
         'addresses': addresses,
-        'orders': orders,
-        'active_tab': active_tab
+        'orders': order_details,
+        'active_tab': active_tab,
     })
+
+
 
 @never_cache
 @login_required
@@ -776,3 +827,197 @@ def remove_from_cart(request, cart_item_id):
     cart_item.delete()
     messages.success(request, "Item removed from the cart.")
     return redirect('cart_view')
+
+@login_required
+def checkout(request):
+    user = request.user
+    cart_items = Cart.get_user_cart(user)
+    total_price = sum(item.total_price() for item in cart_items)
+
+     # Prepare cart data including product image URLs
+    cart_data = []
+    for item in cart_items:
+        image = ProductImage.objects.filter(variant=item.product_variant).first()
+        cart_data.append({
+            'id': item.id,
+            'product_name': item.product_variant.product.name,
+            'color': item.product_variant.color.color_name,
+            'size': item.product_variant.size.size_name,
+            'price': item.product_variant.price,
+            'quantity': item.quantity,
+            'total_price': item.total_price(),
+            'image_url': image.image_url.url if image else None,
+        })
+
+    if request.method == "POST":
+        use_default = request.POST.get("use_default") == "true"
+
+        if use_default:
+            # Fetch the default address
+            shipping_address = Address.objects.filter(user=user, is_default=True).first()
+            if not shipping_address:
+                messages.error(request, "No default address found. Please provide an address.")
+                return redirect("checkout")
+        else:
+            # Collect new address details from POST data
+            address_line1 = request.POST.get("address_line1", "").strip()
+            city = request.POST.get("city", "").strip()
+            state = request.POST.get("state", "").strip()
+            postal_code = request.POST.get("postal_code", "").strip()
+            country = request.POST.get("country", "").strip()
+
+            # Check if all required fields are provided
+            if not all([address_line1, city, state, postal_code, country]):
+                messages.error(request, "Please fill out all required address fields.")
+                return redirect("checkout")
+
+            # Save the new address
+            shipping_address = Address.objects.create(
+                user=user,
+                address_line1=address_line1,
+                address_line2=request.POST.get("address_line2", "").strip(),
+                city=city,
+                state=state,
+                postal_code=postal_code,
+                country=country,
+                is_default=False,  # Do not save as default unless explicitly set
+            )
+            messages.success(request, "Address saved successfully.")
+
+        # Save the shipping address in session for order placement
+        request.session["shipping_address_id"] = shipping_address.id
+
+        return redirect("place_order")  # Proceed to confirm order page
+
+    return render(request, "user/checkout.html", {
+        "cart_items": cart_data,
+        "total_price": total_price,
+    })
+
+
+
+
+@login_required
+@transaction.atomic
+def place_order(request):
+    user = request.user
+    cart_items = Cart.get_user_cart(user)
+
+    if not cart_items.exists():
+        messages.error(request, "Your cart is empty.")
+        return redirect("checkout")
+
+    shipping_address_id = request.session.get("shipping_address_id")
+    if not shipping_address_id:
+        messages.error(request, "No shipping address selected. Please go back to checkout.")
+        return redirect("checkout")
+
+    try:
+        shipping_address = Address.objects.get(id=shipping_address_id)
+    except Address.DoesNotExist:
+        messages.error(request, "The selected address is no longer available.")
+        return redirect("checkout")
+
+    total_price = sum(item.total_price() for item in cart_items)
+
+    if request.method == "POST":
+        # Handle custom shipping address if selected
+        if request.POST.get("shipping_address"):
+            shipping_first_name = request.POST.get("shipping_first_name")
+            shipping_last_name = request.POST.get("shipping_last_name")
+            shipping_email = request.POST.get("shipping_email")
+            shipping_address_line1 = request.POST.get("shipping_address")
+            shipping_city = request.POST.get("shipping_city")
+            shipping_state = request.POST.get("shipping_state")
+            shipping_postal_code = request.POST.get("shipping_postal_code")
+            shipping_country = request.POST.get("shipping_country")
+            # You could implement validation and saving here for new shipping address
+
+        # Get payment method
+        payment_method = request.POST.get("payment_method")
+        if not payment_method:
+            messages.error(request, "Please select a payment method.")
+            return redirect("place_order")
+
+        if payment_method not in ["cod", "bank_transfer", "cheque", "paypal"]:
+            messages.error(request, "Invalid payment method.")
+            return redirect("place_order")
+
+        # Create order
+        order = Order.objects.create(
+            user=user,
+            shipping_address=shipping_address,
+            total_amount=total_price,
+            status="Pending" if payment_method == "cod" else "Processing",
+        )
+
+        # Create order items and adjust stock
+        for cart_item in cart_items:
+            # Ensure the product_variant is passed when creating OrderItem
+            OrderItem.objects.create(
+                order=order,
+                product_variant=cart_item.product_variant,  # This fixes the IntegrityError
+                quantity=cart_item.quantity,
+                price=cart_item.product_variant.price * cart_item.quantity,  # Total price for the item
+            )
+            # Update stock quantity
+            cart_item.product_variant.stock_quantity -= cart_item.quantity
+            cart_item.product_variant.save()
+
+        # Clear the user's cart
+        cart_items.delete()
+
+        # Set success message
+        if payment_method == "cod":
+            messages.success(request, "Order placed successfully! Payment will be collected upon delivery.")
+        else:
+            messages.success(request, "Order placed successfully!")
+
+        return redirect("order_summary", order_id=order.id)
+
+    return render(request, "user/place_order.html", {
+        "cart_items": cart_items,
+        "shipping_address": shipping_address,
+        "total_price": total_price,
+    })
+
+@login_required
+def order_summary(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+
+    # Fetch order items, prefetching related ProductVariant and associated ProductImages
+    order_items = order.items.all().select_related('product_variant').prefetch_related('product_variant__productimage_set')
+
+    # Prepare order data with image URLs
+    order_data = []
+    for item in order_items:
+        # Get the first product image for the product variant
+        image = item.product_variant.productimage_set.first()  # Correctly access related images
+        order_data.append({
+            'product_name': item.product_variant.product.name,
+            'color': item.product_variant.color.color_name,
+            'size': item.product_variant.size.size_name,
+            'price': item.price,
+            'quantity': item.quantity,
+            'total_price': item.price * item.quantity,
+            'image_url': image.image_url.url if image else None,  # Access the image URL or fallback to None
+        })
+
+    return render(request, "user/order_summary.html", {
+        "order": order,
+        "order_items": order_data,
+    })
+
+@login_required
+def cancel_order(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+
+    if order.status in ["Pending", "Processing"]:  # Check if order is cancellable
+        order.status = "Cancelled"
+        order.save()
+        messages.success(request, "Your order has been cancelled.")
+    else:
+        messages.error(request, "This order cannot be cancelled.")
+
+    return redirect("profile")
+
