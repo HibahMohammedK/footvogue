@@ -472,6 +472,71 @@ def delete_product(request, pk):
     # Redirect to the product list (or another view as needed)
     return redirect('view_products')
 
+#order
+ 
+
+def order_management(request):
+    # Fetch all orders with related items, product variants, and images
+    orders = (
+        Order.objects.all()
+        .prefetch_related('items__product_variant__product', 'items__product_variant__productimage_set')  
+        .order_by('-order_date')
+    )
+    
+    # Prepare the context to pass to the template
+    context = {
+        'orders': orders
+    }
+    
+    # Render the template with the orders data
+    return render(request, 'admin/orders/order_list.html', context)
+
+
+
+def change_order_status(request, order_id):
+    # Get the order by ID or raise a 404 error if not found
+    order = get_object_or_404(Order, id=order_id)
+
+    if request.method == 'POST':
+        # Fetch the new status from the POST data
+        new_status = request.POST.get('status')
+
+        # Validate if the status is in the allowed choices
+        valid_statuses = [choice[0] for choice in Order.STATUS_CHOICES]
+        if new_status in valid_statuses:
+            old_status = order.status  # Track the old status for feedback
+            order.status = new_status  # Update the order status
+            order.save()  # Save changes to the database
+
+            # Add a success message
+            messages.success(
+                request,
+                f"Order #{order.id} status updated from '{old_status}' to '{new_status}'."
+            )
+        else:
+            # Add an error message for invalid status
+            messages.error(request, f"Invalid status: {new_status}")
+
+    return redirect('order_management')
+
+@never_cache
+@login_required
+def admin_cancel_order(request, order_id):
+    """
+    Allows an admin to cancel any order.
+    """
+    if not request.user.is_staff:
+        messages.error(request, "You do not have the required permissions to cancel orders.")
+        return redirect('home')
+
+    order = get_object_or_404(Order, id=order_id)
+    if order.status in ['Pending', 'Processing']:
+        order.status = 'Cancelled'
+        order.save()
+        messages.success(request, f"Order #{order.id} has been successfully cancelled.")
+    else:
+        messages.error(request, "Order cannot be cancelled.")
+    return redirect('order_management')  # Redirect to the admin order management page
 
 
 #####   user products  #####
@@ -741,18 +806,22 @@ def delete_address(request, id):
         return redirect('/profile?tab=addresses')
     return redirect('/profile?tab=addresses')
 
-
 @never_cache
 @login_required
-def cancel_order(request, order_id):
+def user_cancel_order(request, order_id):
+    """
+    Allows a user to cancel their own orders if they meet the criteria.
+    """
     order = get_object_or_404(Order, id=order_id, user=request.user)
     if order.status in ['Pending', 'Processing']:
         order.status = 'Cancelled'
         order.save()
-        messages.success(request, f"Order #{order_id} has been cancelled.")
+        messages.success(request, f"Order #{order.id} has been successfully cancelled.")
     else:
         messages.error(request, "Order cannot be cancelled.")
-    return redirect('profile')
+    return redirect('profile')  # Redirect to the user's profile
+
+
 
 
 def change_password(request):

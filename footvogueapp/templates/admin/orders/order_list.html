@@ -1,0 +1,55 @@
+{% extends 'admin/admin_dash.html' %}
+
+{% block content %}
+    <h1>Order Management</h1>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>User</th>
+                <th>Total Amount</th>
+                <th>Status</th>
+                <th>Order Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+             <!-- Messages -->
+             {% if messages %}
+             <div class="mt-3 text-center">
+                 {% for message in messages %}
+                 <p style="color: red;">{{ message }}</p>
+                 {% endfor %}
+             </div>
+             {% endif %}
+            {% for order in orders %}
+                <tr>
+                    <td>{{ order.id }}</td>
+                    <td>{{ order.user.username }}</td>
+                    <td>${{ order.total_amount }}</td>
+                    <td>
+                        <!-- Dropdown for status change -->
+                        <form method="POST" action="{% url 'change_order_status' order.id %}">
+                            {% csrf_token %}
+                            <select name="status" class="form-select">
+                                {% for key, value in order.STATUS_CHOICES %}
+                                    <option value="{{ key }}" {% if order.status == key %}selected{% endif %}>
+                                        {{ value }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-primary btn-sm mt-1">Update</button>
+                        </form>
+                    </td>
+                    <td>{{ order.order_date }}</td>
+                    <td>
+                        <!-- Action buttons for other operations -->
+                        <a href="{% url 'admin_cancel_order' order.id %}" class="btn btn-danger btn-sm">Cancel</a>
+
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

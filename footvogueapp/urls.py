@@ -34,10 +34,14 @@ urlpatterns = [
     path('products/edit/<int:pk>/', views.edit_product, name='edit_product'),
     path('products/delete/<int:pk>/', views.delete_product, name='delete_product'),
 
+    path('order_management/', views.order_management, name='order_management'),
+    path('order/<int:order_id>/change_status/', views.change_order_status, name='change_order_status'), 
+    path('admin_cancel_order/<int:order_id>/', views.admin_cancel_order, name='admin_cancel_order'),
+    
     path('profile/', views.profile, name='profile'),
     path('profile/edit/', views.edit_profile, name='edit_profile'),
     path('profile/address/', views.manage_address, name='manage_address'),
-    path('profile/order/cancel/<int:order_id>/', views.cancel_order, name='cancel_order'),
+    path('profile/order/cancel/<int:order_id>/', views.user_cancel_order, name='user_cancel_order'),
     path('profile/password/', views.change_password, name='change_password'),
     path('address/edit/<int:id>/', views.edit_address, name='edit_address'),
     path('address/delete/<int:id>/', views.delete_address, name='delete_address'),
@@ -55,8 +59,7 @@ urlpatterns = [
     path('checkout/', views.checkout, name='checkout'),
     path('place_order/', views.place_order, name='place_order'),
     path('order_summary/<int:order_id>/', views.order_summary, name='order_summary'),
-    path("cancel-order/<int:order_id>/", views.cancel_order, name="cancel_order"),
-   
+    
 
 
 ] 
