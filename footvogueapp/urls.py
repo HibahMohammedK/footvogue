@@ -13,6 +13,7 @@ urlpatterns = [
     path('resend-otp/', views.resend_otp, name='resend_otp'),
  
     # URLs for product details and variant details
+    path('products/', views.products, name='products'),
     path('product/<int:product_id>/', views.product_details, name='product_details'),
     path('product/<int:product_id>/variant/<int:variant_id>/', views.product_details, name='product_details_variant'),
     path('product/<int:product_id>/submit_review_and_rating/', views.submit_review_and_rating, name='submit_review_and_rating'),

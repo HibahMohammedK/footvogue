@@ -7,7 +7,7 @@ import logging
 from django.contrib.auth.decorators import login_required
 from .forms import ReviewForm, RatingForm
 from django.core.paginator import Paginator
-from django.db.models import Avg
+from django.db.models import Avg, Count
 from .utils import generate_and_send_otp 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -459,18 +459,20 @@ def edit_product(request, pk):
     })
 
 def delete_product(request, pk):
-    # Retrieve the product object
     product = get_object_or_404(Product, pk=pk)
-    
-    # Soft delete the product by setting `is_deleted = True`
+
+    # Soft delete the product
     product.is_deleted = True
     product.save()
-    
+
+    # Soft delete associated variants
+    product.productvariant_set.update(is_deleted=True)
+
     # Add a success message
-    messages.success(request, "Product deleted successfully!")
-    
-    # Redirect to the product list (or another view as needed)
+    messages.success(request, "Product and its variants were successfully deleted!")
+
     return redirect('view_products')
+
 
 #order
  
@@ -541,6 +543,79 @@ def admin_cancel_order(request, order_id):
 
 #####   user products  #####
 
+from django.db.models import Q, Min, Max
+
+def products(request):
+    # Extract filter parameters from the GET request
+    category_filter = request.GET.get('category', None)
+    price_min = request.GET.get('price_min', None)
+    price_max = request.GET.get('price_max', None)
+    sort_criteria = request.GET.get('sort', 'new_arrivals')  # Default sorting
+    in_stock = request.GET.get('in_stock', None)
+
+    # Initialize the filter query
+    filter_query = Q()
+
+    # Category filter
+    if category_filter:
+        filter_query &= Q(product__category__id=category_filter)
+
+    # Price filter (on ProductVariant)
+    price_filter_query = Q()
+
+    if price_min and price_max:
+        price_filter_query &= Q(price__gte=price_min, price__lte=price_max)
+    elif price_min:
+        price_filter_query &= Q(price__gte=price_min)
+    elif price_max:
+        price_filter_query &= Q(price__lte=price_max)
+
+    # Stock filter
+    if in_stock == "true":
+        price_filter_query &= Q(stock_quantity__gt=0)
+
+    # Apply the filters to the ProductVariant model
+    product_variants = ProductVariant.objects.filter(price_filter_query)
+
+    # Get distinct products by filtering on the ProductVariant model
+    product_ids = product_variants.values('product_id').distinct()
+    products = Product.objects.filter(id__in=product_ids)
+
+    # Sorting logic based on the selected criteria
+    if sort_criteria == 'popularity':
+        # Order by average rating from Rating table
+        products = products.annotate(average_rating=Avg('ratings__rating')).order_by('-average_rating')
+    elif sort_criteria == 'price_low_high':
+        products = products.annotate(min_price=Min('productvariant__price')).order_by('min_price')
+    elif sort_criteria == 'price_high_low':
+        products = products.annotate(max_price=Max('productvariant__price')).order_by('-max_price')
+    elif sort_criteria == 'average_ratings':
+        products = products.annotate(average_rating=Avg('ratings__rating')).order_by('-average_rating')
+    elif sort_criteria == 'featured':
+        products = products.filter(is_featured=True)
+    elif sort_criteria == 'new_arrivals':
+        products = products.order_by('-created_at')
+    elif sort_criteria == 'a_to_z':
+        products = products.order_by('name')
+    elif sort_criteria == 'z_to_a':
+        products = products.order_by('-name')
+
+    # Apply distinct again to remove duplicate products
+    products = products.distinct()
+
+    # Fetch categories again for filter sidebar
+    categories = Category.objects.all().exclude(is_deleted= True)
+
+    # Render the product list
+    return render(request, 'user/products.html', {
+        'products': products,
+        'categories': categories,
+        'selected_categories': category_filter,
+        'sort_criteria': sort_criteria,
+        'show_in_stock_only': in_stock == 'true',
+        'price_min': price_min,
+        'price_max': price_max
+    })
 
 
 def product_details(request, product_id, variant_id=None):
@@ -903,7 +978,7 @@ def checkout(request):
     cart_items = Cart.get_user_cart(user)
     total_price = sum(item.total_price() for item in cart_items)
 
-     # Prepare cart data including product image URLs
+    # Prepare cart data including product image URLs
     cart_data = []
     for item in cart_items:
         image = ProductImage.objects.filter(variant=item.product_variant).first()
@@ -927,6 +1002,22 @@ def checkout(request):
             if not shipping_address:
                 messages.error(request, "No default address found. Please provide an address.")
                 return redirect("checkout")
+
+            # If a default address exists, update it with new details
+            shipping_address.address_line1 = request.POST.get("address_line1", "").strip()
+            shipping_address.city = request.POST.get("city", "").strip()
+            shipping_address.state = request.POST.get("state", "").strip()
+            shipping_address.postal_code = request.POST.get("postal_code", "").strip()
+            shipping_address.country = request.POST.get("country", "").strip()
+
+            # Check if all required fields are provided
+            if not all([shipping_address.address_line1, shipping_address.city, shipping_address.state, shipping_address.postal_code, shipping_address.country]):
+                messages.error(request, "Please fill out all required address fields.")
+                return redirect("checkout")
+
+            shipping_address.save()  # Save the updated address
+            messages.success(request, "Address updated successfully.")
+
         else:
             # Collect new address details from POST data
             address_line1 = request.POST.get("address_line1", "").strip()
@@ -956,12 +1047,13 @@ def checkout(request):
         # Save the shipping address in session for order placement
         request.session["shipping_address_id"] = shipping_address.id
 
-        return redirect("place_order")  # Proceed to confirm order page
+        return redirect("checkout")  # Proceed to confirm order page
 
     return render(request, "user/checkout.html", {
         "cart_items": cart_data,
         "total_price": total_price,
     })
+
 
 
 

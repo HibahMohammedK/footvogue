@@ -40,7 +40,7 @@
                     {% if messages %}
                         <ul class="messages">
                             {% for message in messages %}
-                                <li class="{{ message.tags }}">{{ message }}</li>
+                            <p style="color: rgb(16, 105, 28);">{{ message }}</p>
                             {% endfor %}
                         </ul>
                     {% endif %}
@@ -52,79 +52,88 @@
     </div>
     <!-- /Add Product Form -->
 </div>
-
 <script>
     let variantCount = 1;
 
     function addVariant() {
-    const variantContainer = document.getElementById('variant-container');
-    const variantDiv = document.createElement('div');
-    variantDiv.classList.add('variant', 'border', 'rounded', 'p-3', 'mb-3');
-    variantDiv.innerHTML = `
-        <div class="mb-3">
-            <label for="variant_price_${variantCount}" class="form-label">Price</label>
-            <input
-                type="number"
-                class="form-control"
-                name="variant_${variantCount}_price"
-                placeholder="Enter price"
-                required>
-        </div>
-        <div class="mb-3">
-            <label for="variant_stock_${variantCount}" class="form-label">Stock</label>
-            <input
-                type="number"
-                class="form-control"
-                name="variant_${variantCount}_stock"
-                placeholder="Enter stock quantity"
-                required>
-        </div>
-        <div class="mb-3" id="color-container-${variantCount}">
-            <label for="variant_colors_${variantCount}" class="form-label">Colors</label>
-            <input
-                type="text"
-                class="form-control"
-                name="variant_${variantCount}_colors[]"
-                placeholder="Enter color name">
-            <input
-                type="color"
-                class="form-control mt-2"
-                name="variant_${variantCount}_color_code[]">
-            <button type="button" class="btn btn-sm btn-secondary mt-2" onclick="addColor(${variantCount})">Add Another Color</button>
-        </div>
-        <div class="mb-3">
-            <label for="variant_sizes_${variantCount}" class="form-label">Sizes</label>
-            <input
-                type="text"
-                class="form-control"
-                name="variant_${variantCount}_sizes[]"
-                placeholder="Enter size (e.g., S, M, L)">
-        </div>
-        <div class="mb-4">
-            <label for="variant_images_${variantCount}" class="form-label">Variant Images (At least 3 images required)</label>
-            <input
-                type="file"
-                class="form-control"
-                name="variant_${variantCount}_images[]"
-                multiple
-                required>
-            <small class="text-muted">Upload at least 3 images for this variant.</small>
-        </div>
-    `;
-    variantContainer.appendChild(variantDiv);
-    variantCount++;
-}
-
+        const variantContainer = document.getElementById('variant-container');
+        const variantDiv = document.createElement('div');
+        variantDiv.classList.add('variant', 'border', 'rounded', 'p-3', 'mb-3');
+        variantDiv.innerHTML = `
+            <div class="mb-3">
+                <label for="variant_price_${variantCount}" class="form-label">Price</label>
+                <input
+                    type="number"
+                    class="form-control"
+                    name="variant_${variantCount}_price"
+                    placeholder="Enter price"
+                    required>
+            </div>
+            <div class="mb-3">
+                <label for="variant_stock_${variantCount}" class="form-label">Stock</label>
+                <input
+                    type="number"
+                    class="form-control"
+                    name="variant_${variantCount}_stock"
+                    placeholder="Enter stock quantity"
+                    required>
+            </div>
+            <div class="mb-3" id="color-container-${variantCount}">
+                <label for="variant_colors_${variantCount}" class="form-label">Colors</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    name="variant_${variantCount}_colors[]"
+                    placeholder="Enter color name">
+                <input
+                    type="color"
+                    class="form-control mt-2"
+                    name="variant_${variantCount}_color_code[]">
+                <button type="button" class="btn btn-sm btn-secondary mt-2" onclick="addColor(${variantCount})">Add Another Color</button>
+            </div>
+            <div class="mb-3" id="size-container-${variantCount}">
+                <label for="variant_sizes_${variantCount}" class="form-label">Sizes</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    name="variant_${variantCount}_sizes[]"
+                    placeholder="Enter size (e.g., S, M, L)">
+                <button type="button" class="btn btn-sm btn-secondary mt-2" onclick="addSize(${variantCount})">Add Another Size</button>
+            </div>
+            <div class="mb-4">
+                <label for="variant_images_${variantCount}" class="form-label">Variant Images (At least 3 images required)</label>
+                <input
+                    type="file"
+                    class="form-control"
+                    name="variant_${variantCount}_images[]"
+                    multiple
+                    required>
+                <small class="text-muted">Upload at least 3 images for this variant.</small>
+            </div>
+        `;
+        variantContainer.appendChild(variantDiv);
+        variantCount++;
+    }
 
     function addColor(variantId) {
         const colorContainer = document.getElementById(`color-container-${variantId}`);
         const colorInput = `
             <div class="mb-3">
-                <input type="text" class="form-control" name="variants[${variantId}][colors][]" placeholder="Enter color name">
-                <input type="color" class="form-control mt-2" name="variants[${variantId}][color_code][]">
+                <input type="text" class="form-control" name="variant_${variantId}_colors[]" placeholder="Enter color name">
+                <input type="color" class="form-control mt-2" name="variant_${variantId}_color_code[]">
             </div>
         `;
         colorContainer.insertAdjacentHTML('beforeend', colorInput);
     }
+
+    function addSize(variantId) {
+        const sizeContainer = document.getElementById(`size-container-${variantId}`);
+        const sizeInput = `
+            <div class="mb-3">
+                <input type="text" class="form-control" name="variant_${variantId}_sizes[]" placeholder="Enter size (e.g., S, M, L)">
+            </div>
+        `;
+        sizeContainer.insertAdjacentHTML('beforeend', sizeInput);
+    }
 </script>
-{% endblock %}
+{% endblock%}
