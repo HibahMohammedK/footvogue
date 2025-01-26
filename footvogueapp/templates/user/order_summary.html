@@ -54,6 +54,7 @@
             <p>{{ item.quantity }} x ${{ item.price }}</p>
             <p>Total: ${{ item.total_price }}</p>
         </div>
+        <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
     </div>
 {% endfor %}
 

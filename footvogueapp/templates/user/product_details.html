@@ -83,7 +83,7 @@
                                     {% endif %}
                                 </h3>
                                 <span class="product-available">
-                                    {% if selected_variant.stock > 0 %} In Stock {% else %} Out of Stock {% endif %}
+                                    {% if selected_variant.stock_quantity > 0 %} In Stock - {{ selected_variant.stock_quantity}} {% else %} Out of Stock {% endif %}
                                 </span>
                             </div>
 
