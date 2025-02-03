@@ -75,6 +75,9 @@ urlpatterns = [
     path('delete/<int:coupon_id>/', views.delete_coupon, name='delete_coupon'),  # Delete a coupon
     path('validate/', views.validate_coupon, name='validate_coupon'),  # Validate and apply coupon
 
+    path('sales_report/', views.sales_report, name='sales_report'),
+    path('sales_report/download/<str:report_type>/',views.download_sales_report, name='download_sales_report'),
+
 
 ] 
 

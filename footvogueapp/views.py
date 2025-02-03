@@ -7,7 +7,7 @@ import logging
 from django.contrib.auth.decorators import login_required
 from .forms import ReviewForm, RatingForm
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count
+from django.db.models import Avg, Sum, Count
 from .utils import generate_and_send_otp 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -20,6 +20,7 @@ from django.contrib.messages import success, error
 from django.http import JsonResponse
 import json
 from django.views.decorators.http import require_http_methods
+from dateutil import parser
 
    
 
@@ -1474,3 +1475,112 @@ def validate_coupon(request):
         return JsonResponse({"error": "Invalid coupon"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
+
+import datetime
+import pandas as pd
+from django.shortcuts import render
+from django.http import JsonResponse, HttpResponse
+from reportlab.pdfgen import canvas
+
+def sales_report(request):
+    """Handles sales report filtering and downloading."""
+    filter_type = request.GET.get('filter', 'daily')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    # Ensure timezone awareness
+    today = timezone.now().date()
+
+    if filter_type == "daily":
+        start_date = end_date = today
+    elif filter_type == "weekly":
+        start_date = today - datetime.timedelta(days=7)
+        end_date = today
+    elif filter_type == "monthly":
+        start_date = today.replace(day=1)
+        end_date = today
+    elif filter_type == "custom" and start_date and end_date:
+        start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+    else:
+        start_date = end_date = today
+
+    # Filter orders based on date range
+    orders = Order.objects.filter(order_date__date__range=[start_date, end_date])
+
+    # Aggregated values
+    total_orders = orders.count()
+    total_sales = orders.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    total_discount = orders.aggregate(Sum('discount'))['discount__sum'] or 0
+
+    context = {
+        'orders': orders,
+        'total_orders': total_orders,
+        'total_sales': total_sales,
+        'total_discount': total_discount,
+        'filter_type': filter_type,
+        'start_date': start_date,
+        'end_date': end_date
+    }
+
+    return render(request, 'admin/sales_report.html', context)
+
+
+def download_sales_report(request, report_type):
+    """Exports sales report to PDF or Excel."""
+    filter_type = request.GET.get('filter', 'daily')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    today = timezone.now().date()
+
+    try:
+        if filter_type == "daily":
+            start_date = end_date = today
+        elif filter_type == "weekly":
+            start_date = today - datetime.timedelta(days=7)
+            end_date = today
+        elif filter_type == "monthly":
+            start_date = today.replace(day=1)
+            end_date = today
+        elif filter_type == "custom" and start_date and end_date:
+            # 🔹 Use dateutil.parser to handle different date formats
+            start_date = parser.parse(start_date).date()
+            end_date = parser.parse(end_date).date()
+        else:
+            start_date = end_date = today
+    except ValueError:
+        return JsonResponse({"error": "Invalid date format"}, status=400)
+
+    # Filter orders based on date range
+    orders = Order.objects.filter(order_date__date__range=[start_date, end_date])
+
+    # PDF Export
+    if report_type == "pdf":
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="sales_report.pdf"'
+        pdf = canvas.Canvas(response)
+        pdf.drawString(100, 800, f"Sales Report ({start_date} to {end_date})")
+        y_position = 780
+
+        for order in orders:
+            y_position -= 20
+            pdf.drawString(100, y_position, f"Order ID: {order.id}, Amount: ${order.total_amount}, Discount: ${order.discount}")
+
+        pdf.showPage()
+        pdf.save()
+        return response
+
+    # Excel Export
+    elif report_type == "excel":
+        if orders.exists():
+            df = pd.DataFrame(list(orders.values("id", "order_date", "total_amount", "discount")))
+        else:
+            df = pd.DataFrame(columns=["ID", "Order Date", "Total Amount", "Discount"])  # Handle empty data
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="sales_report.xlsx"'
+        df.to_excel(response, index=False)
+        return response
+
+    return JsonResponse({"error": "Invalid report type"}, status=400)

@@ -1,0 +1,116 @@
+{% extends "admin/admin_dash.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow p-4">
+                <h2 class="mb-4">Sales Report</h2>
+
+                <!-- Filter Form -->
+                <form method="GET" action="{% url 'sales_report' %}" class="mb-4">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label><strong>Filter:</strong></label>
+                            <select name="filter" class="form-control" onchange="this.form.submit()">
+                                <option value="daily" {% if filter_type == 'daily' %}selected{% endif %}>Daily</option>
+                                <option value="weekly" {% if filter_type == 'weekly' %}selected{% endif %}>Weekly</option>
+                                <option value="monthly" {% if filter_type == 'monthly' %}selected{% endif %}>Monthly</option>
+                                <option value="custom" {% if filter_type == 'custom' %}selected{% endif %}>Custom Date</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-3" id="custom-date-fields" {% if filter_type != 'custom' %}style="display:none;"{% endif %}>
+                            <label><strong>Start Date:</strong></label>
+                            <input type="date" name="start_date" value="{{ start_date }}" class="form-control">
+                        </div>
+
+                        <div class="col-md-3" id="custom-date-fields-end" {% if filter_type != 'custom' %}style="display:none;"{% endif %}>
+                            <label><strong>End Date:</strong></label>
+                            <input type="date" name="end_date" value="{{ end_date }}" class="form-control">
+                        </div>
+
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">Apply</button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Report Summary -->
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card p-3 shadow-sm text-center">
+                            <h5>Total Orders</h5>
+                            <p class="h4">{{ total_orders }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3 shadow-sm text-center">
+                            <h5>Total Sales</h5>
+                            <p class="h4 text-success">${{ total_sales }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3 shadow-sm text-center">
+                            <h5>Total Discount</h5>
+                            <p class="h4 text-danger">-${{ total_discount }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Order List -->
+                <div class="table-responsive mt-4">
+                    <table class="table table-bordered">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Discount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr>
+                                <td>{{ order.id }}</td>
+                                <td>{{ order.order_date }}</td>
+                                <td>${{ order.total_amount }}</td>
+                                <td>${{ order.discount }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center">No orders found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Export Buttons -->
+                <div class="text-right mt-4">
+                    <a href="{% url 'download_sales_report' 'pdf' %}?filter={{ filter_type }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-danger">
+                        <i class="fas fa-file-pdf"></i> Download PDF
+                    </a>
+                    <a href="{% url 'download_sales_report' 'excel' %}?filter={{ filter_type }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-success">
+                        <i class="fas fa-file-excel"></i> Download Excel
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.querySelector("[name='filter']").addEventListener("change", function() {
+        let customFields = document.getElementById("custom-date-fields");
+        let customFieldsEnd = document.getElementById("custom-date-fields-end");
+        if (this.value === "custom") {
+            customFields.style.display = "block";
+            customFieldsEnd.style.display = "block";
+        } else {
+            customFields.style.display = "none";
+            customFieldsEnd.style.display = "none";
+        }
+    });
+</script>
+{% endblock %}
