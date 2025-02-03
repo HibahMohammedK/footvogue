@@ -48,7 +48,7 @@
         }
 
         .sidebar a.active {
-            background-color: #007bff;
+            background-color: #5b6c7e;
             color: #fff;
         }
 
@@ -102,7 +102,7 @@
 
         .card .stat {
             font-size: 24px;
-            color: #007bff;
+            color: #697f96;
         }
     </style>
 </head>
@@ -115,6 +115,8 @@
         <a href="{% url 'category_list' %}"><i class="fa fa-list"></i> Category Management</a>
         <a href="{% url 'view_products' %}"><i class="fa fa-shopping-bag"></i> Product Management</a>
         <a href="{% url 'order_management' %}"><i class="fa fa-truck"></i> Order Management</a>
+        <a href="{% url 'offer_list' %}"><i class="fa fa-tag"></i> Offer Management</a>
+        <a href="{% url 'coupon_list' %}"><i class="fa fa-ticket"></i> Coupon Management</a>
         <a href="#"><i class="fa fa-bar-chart"></i> Reports</a>
         <a href="#"><i class="fa fa-cogs"></i> Settings</a>
         <a href="{% url 'logout' %}"><i class="fa fa-sign-out"></i> Logout</a>

@@ -60,7 +60,20 @@ urlpatterns = [
     path('checkout/', views.checkout, name='checkout'),
     path('place_order/', views.place_order, name='place_order'),
     path('order_summary/<int:order_id>/', views.order_summary, name='order_summary'),
-    
+
+   # Offer Management URLs
+    path('offers/', views.offer_list, name='offer_list'),
+    path('create/', views.create_offer, name='create_offer'),  # Create a new offer
+    path("api/offers/", views.get_offers, name="get_offers"),
+    path("api/referral-offers/", views.get_referral_offers, name="get_referral_offers"),
+    path("api/offers/<int:offer_id>/delete/", views.delete_offer, name="delete_offer"),
+    path('toggle/<int:offer_id>/', views.toggle_offer_status, name='toggle_offer_status'),  # Activate/deactivate offer
+
+    # Coupon Management URLs
+    path('coupons/', views.coupon_list, name='coupon_list'),  # List all coupons
+    path('coupons/add/', views.add_coupon, name='add_coupon'), 
+    path('delete/<int:coupon_id>/', views.delete_coupon, name='delete_coupon'),  # Delete a coupon
+    path('validate/', views.validate_coupon, name='validate_coupon'),  # Validate and apply coupon
 
 
 ] 

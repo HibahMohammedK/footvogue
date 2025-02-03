@@ -1,65 +1,60 @@
 {% extends "user/home.html" %}
 {% load static %}
 {% block content %}
-<!-- <div class="section">
-    {% if messages %}
-    <div class="mt-3 text-center">
-        {% for message in messages %}
-        <p style="color: red;">{{ message }}</p>
-        {% endfor %}
-    </div>
-    {% endif %} -->
-    <div class="container">
-        <div class="order-summary-wrapper text-center">
-            <!-- Success Icon -->
-            <div class="success-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10" stroke="green"></circle>
-                    <polyline points="9 12 12 15 16 9" stroke="green"></polyline>
-                </svg>
+<div class="container">
+    <div class="order-summary-wrapper text-center">
+        <!-- Success Icon -->
+        <div class="success-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" stroke="green"></circle>
+                <polyline points="9 12 12 15 16 9" stroke="green"></polyline>
+            </svg>
+        </div>
+        <h2 class="text-success">Order Placed Successfully!</h2>
+        <p class="text-muted">Thank you for your purchase. Your order has been placed and is now being processed.</p>
+
+        <hr class="my-4">
+
+        <!-- Order Details -->
+        <div class="order-details text-left">
+            <h3>Your Order Summary</h3>
+            <p><strong>Order ID:</strong> {{ order.id }}</p>
+            <p><strong>Status:</strong> <span class="badge badge-info">{{ order.status }}</span></p>
+            <!--  
+
+
+            <h4 class="mt-4">Shipping Address</h4>
+            <div class="shipping-address bg-light p-3 rounded">
+                <p>{{ order.shipping_address.address_line1 }}</p>
+                <p>{{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}</p>
+                <p>{{ order.shipping_address.country }}</p>
             </div>
-            <h2 class="text-success">Order Placed Successfully!</h2>
-            <p class="text-muted">Thank you for your purchase. Your order has been placed and is now being processed.</p>
 
-            <hr class="my-4">
-
-            <!-- Order Details -->
-            <div class="order-details text-left">
-                <h3>Your Order Summary</h3>
-                <p><strong>Order ID:</strong> {{ order.id }}</p>
-                <p><strong>Status:</strong> <span class="badge badge-info">{{ order.status }}</span></p>
-                <p><strong>Total Amount:</strong> <span class="text-primary">${{ order.total_amount|floatformat:2 }}</span></p>
-
-                <h4 class="mt-4">Shipping Address</h4>
-                <div class="shipping-address bg-light p-3 rounded">
-                    <p>{{ order.shipping_address.address_line1 }}</p>
-                    <p>{{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}</p>
-                    <p>{{ order.shipping_address.country }}</p>
+            <h4 class="mt-4">Order Items</h4>
+            <ul class="list-group">
+                {% for item in order_items %}
+                <div class="cart-item">
+                    <div class="cart-item-image">
+                        {% if item.image_url %}
+                            <img src="{{ item.image_url }}" alt="{{ item.product_name }}">
+                        {% else %}
+                            <img src="{% static 'images/placeholder.png' %}" alt="No image available">
+                        {% endif %}
+                    </div>
+                    <div class="cart-item-details">
+                        <h3>{{ item.product_name }}</h3>
+                        <p>{{ item.color }} - {{ item.size }}</p>
+                        <p><del class="text-danger">${{ item.original_price }}</del> <span class="text-success">${{ item.discounted_price }}</span></p>
+                        <p>{{ item.quantity }} x ${{ item.discounted_price }}</p>
+                        <p>Total: ${{ item.total_price }}</p>
+                        {% if item.total_savings > 0 %}
+                            <p class="text-success">You saved: ${{ item.total_savings }}</p>
+                        {% endif %}
+                    </div>
+                    <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
                 </div>
-
-                <h4 class="mt-4">Order Items</h4>
-                <ul class="list-group">
-                    {% for item in order_items %}
-    <div class="cart-item">
-        <div class="cart-item-image">
-            {% if item.image_url %}
-                <img src="{{ item.image_url }}" alt="{{ item.product_name }}">
-            {% else %}
-                <img src="{% static 'images/placeholder.png' %}" alt="No image available">
-            {% endif %}
-        </div>
-        <div class="cart-item-details">
-            <h3>{{ item.product_name }}</h3>
-            <p>{{ item.color }} - {{ item.size }}</p>
-            <p>{{ item.quantity }} x ${{ item.price }}</p>
-            <p>Total: ${{ item.total_price }}</p>
-        </div>
-        <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
-    </div>
-{% endfor %}
-
-                </ul>
-            </div>
+                {% endfor %}
+            </ul>
         </div>
     </div>
 </div>
@@ -125,12 +120,11 @@
         border-top: 1px solid #ddd;
     }
     .cart-item-image img {
-    max-width: 100px; /* Resize the image to a suitable width */
-    max-height: 100px; /* Resize the image to a suitable height */
-    object-fit: cover; /* Ensure the image covers the area without distorting */
-    border-radius: 8px; /* Optionally, make the edges rounded */
-    border: 1px solid #ddd; /* Add a border if needed */
-}
-
+        max-width: 100px;
+        max-height: 100px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+    }
 </style>
 {% endblock %}

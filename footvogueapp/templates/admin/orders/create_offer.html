@@ -1,0 +1,216 @@
+{% extends "admin/admin_dash.html" %}
+
+{% block content %}
+<div class="offer-container">
+    <h2>Add New Offer <i class="fa fa-tag"></i></h2>
+    
+    <div id="ajax-message" class="message-container"></div>
+
+    <form method="POST" id="offer-form">
+        {% csrf_token %}
+
+        <!-- Offer Type Selection -->
+        <label for="offer_type">Offer Type:</label>
+        <select id="offer_type" name="offer_type" required onchange="toggleFields()">
+            <option value="">-- Select Offer Type --</option>
+            <option value="product">Product Offer</option>
+            <option value="category">Category Offer</option>
+            <option value="referral">Referral Offer</option>
+        </select>
+
+        <!-- Product Offer Fields -->
+        <div id="product_fields" class="offer-group">
+            <label for="product_id">Select Product:</label>
+            <select id="product_id" name="product_id">
+                <option value="">-- Select Product --</option>
+                {% for product in products %}
+                    <option value="{{ product.id }}">{{ product.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Category Offer Fields -->
+        <div id="category_fields" class="offer-group">
+            <label for="category_id">Select Category:</label>
+            <select id="category_id" name="category_id">
+                <option value="">-- Select Category --</option>
+                {% for category in categories %}
+                    <option value="{{ category.id }}">{{ category.category_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Referral Offer Fields -->
+        <div id="referral_fields" class="offer-group">
+            <label for="referrer_id">Referrer User:</label>
+            <select id="referrer_id" name="referrer_id">
+                <option value="">-- Select Referrer --</option>
+                {% for user in users %}
+                    <option value="{{ user.id }}">{{ user.username }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="referred_user_id">Referred User:</label>
+            <select id="referred_user_id" name="referred_user_id">
+                <option value="">-- Select Referred User --</option>
+                {% for user in users %}
+                    <option value="{{ user.id }}">{{ user.username }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="reward_amount">Referral Reward Amount:</label>
+            <input type="number" id="reward_amount" name="reward_amount" min="0" step="0.01">
+        </div>
+
+        <!-- Common Fields (Hidden for Referral Offer) -->
+        <div id="common_fields" class="offer-group">
+            <label for="discount">Discount Percentage:</label>
+            <input type="number" id="discount" name="discount" min="1" max="100">
+
+            <label for="min_purchase">Minimum Purchase Amount:</label>
+            <input type="number" id="min_purchase" name="min_purchase" min="0">
+
+            <label for="start_date">Start Date:</label>
+            <input type="datetime-local" id="start_date" name="start_date">
+
+            <label for="end_date">End Date:</label>
+            <input type="datetime-local" id="end_date" name="end_date">
+        </div>
+
+        <button type="submit" class="submit-button">Add Offer</button>
+    </form>
+</div>
+
+<!-- Styles -->
+<style>
+.message-container {
+    margin: 15px 0;
+    min-height: 40px;
+}
+
+.success-message {
+    color: #28a745;
+    padding: 10px;
+    background: #d4edda;
+    border-radius: 5px;
+}
+
+.error-message {
+    color: #dc3545;
+    padding: 10px;
+    background: #f8d7da;
+    border-radius: 5px;
+}
+.offer-container {
+    max-width: 600px;
+    margin: auto;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+}
+
+h2 {
+    text-align: center;
+    color: #333;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+}
+
+.offer-group {
+    display: none;
+    margin-top: 15px;
+    transition: all 0.3s ease-in-out;
+}
+
+label {
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+input, select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    width: 100%;
+}
+
+.submit-button {
+    margin-top: 15px;
+    padding: 10px;
+    background: #28a745;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    border-radius: 5px;
+}
+
+.submit-button:hover {
+    background: #218838;
+}
+</style>
+
+<!-- JavaScript to Toggle Fields Dynamically -->
+<script>
+    document.getElementById("offer-form").addEventListener("submit", function(e) {
+        e.preventDefault();  // Prevent default form submission
+        
+        const formData = new FormData(this);
+        const messageContainer = document.getElementById("ajax-message");
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+        fetch("{% url 'create_offer' %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrftoken,
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                messageContainer.innerHTML = `<div class="error-message">${data.error}</div>`;
+            } else {
+                messageContainer.innerHTML = `<div class="success-message">${data.message}</div>`;
+                this.reset();  // Clear form fields
+                toggleFields();  // Reset visible fields
+                setTimeout(() => messageContainer.innerHTML = "", 3000);  // Clear message after 3s
+            }
+        })
+        .catch(error => {
+            messageContainer.innerHTML = `<div class="error-message">Network error: ${error}</div>`;
+        });
+    });
+    
+function toggleFields() {
+    let offerType = document.getElementById("offer_type").value;
+
+    let productFields = document.getElementById("product_fields");
+    let categoryFields = document.getElementById("category_fields");
+    let referralFields = document.getElementById("referral_fields");
+    let commonFields = document.getElementById("common_fields");
+
+    // Hide all groups first
+    productFields.style.display = "none";
+    categoryFields.style.display = "none";
+    referralFields.style.display = "none";
+    commonFields.style.display = "none";
+
+    // Show relevant fields based on the selected offer type
+    if (offerType === "product") {
+        productFields.style.display = "block";
+        commonFields.style.display = "block";
+    } else if (offerType === "category") {
+        categoryFields.style.display = "block";
+        commonFields.style.display = "block";
+    } else if (offerType === "referral") {
+        referralFields.style.display = "block";
+    }
+}
+</script>
+
+{% endblock %}

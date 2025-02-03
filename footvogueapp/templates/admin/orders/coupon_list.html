@@ -1,0 +1,109 @@
+{% extends 'admin/admin_dash.html' %}
+
+{% block content %}
+  <div class="container-fluid mt-4">
+    <h1 class="mb-4 text-center">Active Coupons</h1>
+
+    <!-- Search Bar and Add Coupon Button in a Single Section -->
+    <div class="d-flex justify-content-between mb-4">
+      <!-- Search Bar -->
+      <div class="w-75">
+        <input type="text" id="search-bar" class="form-control" placeholder="Search by Coupon Code or Discount" oninput="searchCoupons()" />
+      </div>
+
+      <!-- Add Coupon Button -->
+      <div>
+        <a href="{% url 'add_coupon' %}" class="btn btn-success btn-sm">Add New Coupon</a>
+      </div>
+    </div>
+
+    <!-- Coupon Table -->
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered" id="coupon-table">
+        <thead>
+          <tr>
+            <th>Coupon Code</th>
+            <th>Discount</th>
+            <th>Min Purchase</th>
+            <th>Expiration Date</th>
+            <th>Usage Limit</th>
+            <th>Used Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for coupon in coupons %}
+            <tr>
+              <td>{{ coupon.coupon_code }}</td>
+              <td>{{ coupon.discount_value }} {% if coupon.discount_type == 'percentage' %}%{% endif %}</td>
+              <td>{{ coupon.min_purchase }}</td>
+              <td>{{ coupon.expiration_date|date:"Y-m-d H:i:s" }}</td>
+              <td>{{ coupon.usage_limit }}</td>
+              <td>{{ coupon.used_count }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Button to trigger AJAX request for more coupons -->
+    <div class="text-center mt-4">
+      <button id="load-more" class="btn btn-primary btn-sm" onclick="loadCoupons()">Load More Coupons</button>
+    </div>
+  </div>
+
+  <script>
+    let page = 1;  // Track the current page of coupons to load
+
+    // Function to fetch more coupons using AJAX
+    function loadCoupons() {
+      page += 1;  // Increment page number for next set of coupons
+
+      fetch(`/coupons/?page=${page}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        const tableBody = document.querySelector('#coupon-table tbody');
+        
+        data.coupons.forEach(coupon => {
+          const row = document.createElement('tr');
+          
+          row.innerHTML = `
+            <td>${coupon.coupon_code}</td>
+            <td>${coupon.discount_value} ${coupon.discount_type === 'percentage' ? '%' : ''}</td>
+            <td>${coupon.min_purchase}</td>
+            <td>${coupon.expiration_date}</td>
+            <td>${coupon.usage_limit}</td>
+            <td>${coupon.used_count}</td>
+          `;
+          
+          tableBody.appendChild(row);
+        });
+      })
+      .catch(error => {
+        console.error('Error loading coupons:', error);
+      });
+    }
+
+    // Search Coupons by Coupon Code or Discount
+    function searchCoupons() {
+      const searchQuery = document.querySelector('#search-bar').value.toLowerCase();
+      const tableRows = document.querySelectorAll('#coupon-table tbody tr');
+
+      tableRows.forEach(row => {
+        const couponCode = row.cells[0].textContent.toLowerCase();
+        const discount = row.cells[1].textContent.toLowerCase();
+
+        // Check if the row matches the search query
+        if (couponCode.includes(searchQuery) || discount.includes(searchQuery)) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+  </script>
+{% endblock %}

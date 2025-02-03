@@ -17,7 +17,9 @@ from django.urls import reverse
 from django.http import HttpResponse
 from django.db import transaction
 from django.contrib.messages import success, error
-
+from django.http import JsonResponse
+import json
+from django.views.decorators.http import require_http_methods
 
    
 
@@ -546,23 +548,21 @@ def admin_cancel_order(request, order_id):
 from django.db.models import Q, Min, Max
 
 def products(request):
-    # Extract filter parameters from the GET request
-    category_filter = request.GET.get('category', None)
+    category_filter = request.GET.getlist('category', [])  # Support multiple categories
     price_min = request.GET.get('price_min', None)
     price_max = request.GET.get('price_max', None)
     sort_criteria = request.GET.get('sort', 'new_arrivals')  # Default sorting
     in_stock = request.GET.get('in_stock', None)
 
-    # Initialize the filter query
+    # Initialize filter query
     filter_query = Q()
 
     # Category filter
     if category_filter:
-        filter_query &= Q(product__category__id=category_filter)
+        filter_query &= Q(category__id__in=category_filter)
 
-    # Price filter (on ProductVariant)
+    # Price filter
     price_filter_query = Q()
-
     if price_min and price_max:
         price_filter_query &= Q(price__gte=price_min, price__lte=price_max)
     elif price_min:
@@ -574,16 +574,13 @@ def products(request):
     if in_stock == "true":
         price_filter_query &= Q(stock_quantity__gt=0)
 
-    # Apply the filters to the ProductVariant model
+    # Filter ProductVariant and Product
     product_variants = ProductVariant.objects.filter(price_filter_query)
-
-    # Get distinct products by filtering on the ProductVariant model
     product_ids = product_variants.values('product_id').distinct()
-    products = Product.objects.filter(id__in=product_ids)
+    products = Product.objects.filter(id__in=product_ids).filter(filter_query)
 
-    # Sorting logic based on the selected criteria
+    # Sorting logic
     if sort_criteria == 'popularity':
-        # Order by average rating from Rating table
         products = products.annotate(average_rating=Avg('ratings__rating')).order_by('-average_rating')
     elif sort_criteria == 'price_low_high':
         products = products.annotate(min_price=Min('productvariant__price')).order_by('min_price')
@@ -600,13 +597,10 @@ def products(request):
     elif sort_criteria == 'z_to_a':
         products = products.order_by('-name')
 
-    # Apply distinct again to remove duplicate products
     products = products.distinct()
 
-    # Fetch categories again for filter sidebar
-    categories = Category.objects.all().exclude(is_deleted= True)
+    categories = Category.objects.all().exclude(is_deleted=True)
 
-    # Render the product list
     return render(request, 'user/products.html', {
         'products': products,
         'categories': categories,
@@ -614,75 +608,95 @@ def products(request):
         'sort_criteria': sort_criteria,
         'show_in_stock_only': in_stock == 'true',
         'price_min': price_min,
-        'price_max': price_max
+        'price_max': price_max,
     })
 
 
+
 def product_details(request, product_id, variant_id=None):
-    # Fetch the product and ensure it's not deleted
     product = get_object_or_404(Product, id=product_id, is_deleted=False)
 
-    # Get the category and its parent categories (if any)
+    # Get the category hierarchy
     categories = []
     current_category = product.category
     while current_category:
-        categories.insert(0, current_category)  # Insert at the beginning to maintain the correct order
-        current_category = current_category.parent_category  # Move to the parent category
+        categories.insert(0, current_category)
+        current_category = current_category.parent_category
 
-    # Get all variants for the product
-    variants = product.productvariant_set.all()  # Assuming ProductVariant is related via a ForeignKey to Product
+    # Get all variants and select the default
+    variants = product.productvariant_set.all()
+    selected_variant = get_object_or_404(variants, id=variant_id) if variant_id else variants.first()
 
-    # If a variant_id is provided, use that; otherwise, default to the first variant
-    selected_variant = get_object_or_404(product.productvariant_set, id=variant_id) if variant_id else variants.first()
+    # Fetch active offers
+    now = timezone.now()
+    product_offer = Offer.objects.filter(
+        offer_type='product', product=product, is_active=True,
+        start_date__lte=now, end_date__gte=now
+    ).first()
 
+    category_offers = Offer.objects.filter(
+        offer_type='category', category__in=categories, is_active=True,
+        start_date__lte=now, end_date__gte=now
+    ).select_related('category')
 
-     # Handle adding to cart (POST request)
+    category_offer = category_offers.order_by('-discount_value').first() if category_offers.exists() else None
+
+    # Determine the best discount
+    best_offer = None
+    discount_value = 0
+    if product_offer and category_offer:
+        best_offer = product_offer if product_offer.discount_value > category_offer.discount_value else category_offer
+    elif product_offer:
+        best_offer = product_offer
+    elif category_offer:
+        best_offer = category_offer
+
+    if best_offer:
+        if best_offer.discount_type == 'percentage':  # Assuming discount_type is 'percentage' or 'fixed'
+            discount_value = selected_variant.price * (best_offer.discount_value / 100)
+        else:  # Fixed amount discount
+            discount_value = best_offer.discount_value
+
+    # Ensure discount does not make price negative
+    discounted_price = max(selected_variant.price - discount_value, 0)
+
+    # Add to cart logic
     if request.method == 'POST':
-        # Get the variant_id and quantity from the form
         variant_id = request.POST.get('variant_id')
-        quantity = int(request.POST.get('quantity', 1))  # Default to 1 if no quantity is provided
-        
-        # Get the selected variant and add it to the cart
+        quantity = int(request.POST.get('quantity', 1))
         variant = get_object_or_404(ProductVariant, id=variant_id)
-
-        # Create or update the Cart item for the user
         cart_item, created = Cart.objects.get_or_create(user=request.user, product_variant=variant)
         if cart_item:
-            cart_item.quantity += quantity  # Increase the quantity
+            cart_item.quantity += quantity
+            cart_item.price = discounted_price
             cart_item.save()
-        
-        return redirect('cart')  # Redirect to the cart view after adding the item
+        return redirect('cart')
 
-    # Calculate the average rating from the Rating model
+    # Product rating calculations
     ratings = Rating.objects.filter(product=product)
     total_ratings = ratings.count()
     avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
-    rounded_avg_rating = round(avg_rating) if avg_rating else 0  # Round to the nearest integer
+    rounded_avg_rating = round(avg_rating) if avg_rating else 0
+    filled_stars_range = range(rounded_avg_rating)
+    empty_stars_range = range(5 - rounded_avg_rating)
 
-    # Prepare the star ranges
-    filled_stars_range = range(rounded_avg_rating)  # Range for filled stars
-    empty_stars_range = range(5 - rounded_avg_rating)  # Range for empty stars
-
-    # Pagination for reviews (optional, show 5 reviews per page)
+    # Pagination for reviews
     reviews = Review.objects.filter(product=product)
-    paginator = Paginator(reviews.order_by('-created_at'), 5)  # Order by creation date, latest first
+    paginator = Paginator(reviews.order_by('-created_at'), 5)
     page_number = request.GET.get('page')
     reviews_page = paginator.get_page(page_number)
 
-    # Attach the rating for each review to the review object
     for review in reviews_page:
-        review.rating_value = Rating.objects.filter(user=review.user, product=product).first().rating if Rating.objects.filter(user=review.user, product=product).exists() else 0
+        review.rating_value = Rating.objects.filter(user=review.user, product=product).first().rating \
+            if Rating.objects.filter(user=review.user, product=product).exists() else 0
 
-    # Get related products
-    related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]  # Adjust the number of related products as needed
-
-    # Calculate avg_rating for related products
+    # Related products
+    related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]
     for related_product in related_products:
         ratings = Rating.objects.filter(product=related_product)
         total_ratings = ratings.count()
         related_product.avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
 
-    # Pass the necessary values to the template
     context = {
         'product': product,
         'selected_variant': selected_variant,
@@ -691,13 +705,16 @@ def product_details(request, product_id, variant_id=None):
         'avg_rating': avg_rating,
         'filled_stars_range': filled_stars_range,
         'empty_stars_range': empty_stars_range,
-        'rating_breakdown': [{'rating': i, 'percentage': 20} for i in range(1, 6)],  # Placeholder data
-        'reviews': reviews_page,  # Paginated reviews
-        'related_products': related_products  # Pass related products with avg_rating
+        'rating_breakdown': [{'rating': i, 'percentage': 20} for i in range(1, 6)],
+        'reviews': reviews_page,
+        'related_products': related_products,
+        'best_offer': best_offer,
+        'product_offer': product_offer,
+        'category_offer': category_offer,
+        'discounted_price': discounted_price,
+        'original_price': selected_variant.price
     }
-
     return render(request, 'user/product_details.html', context)
-
 
 
 @login_required(login_url='login')
@@ -914,7 +931,6 @@ def change_password(request):
     return render(request, 'user/change_password.html', {'form': form})
 
 #cart
-
 def add_to_cart(request, variant_id):
     variant = get_object_or_404(ProductVariant, id=variant_id)
 
@@ -933,21 +949,24 @@ def add_to_cart(request, variant_id):
 
     return redirect('cart_view')  # Redirect if not a POST request
 
-
 def cart_view(request):
     cart_items = Cart.get_user_cart(request.user)
     cart_data = []
 
     for item in cart_items:
-        image = ProductImage.objects.filter(variant=item.product_variant).first()
+        variant = item.product_variant
+        image = ProductImage.objects.filter(variant=variant).first()
+        discounted_price = variant.get_discounted_price()  
+        
         cart_data.append({
             'id': item.id,
             'product_name': item.product_variant.product.name,
             'color': item.product_variant.color.color_name,
             'size': item.product_variant.size.size_name,
-            'price': item.product_variant.price,
+            'original_price': variant.price,
+            'offer_price': discounted_price,
             'quantity': item.quantity,
-            'total_price': item.total_price(),
+            'total_price': discounted_price * item.quantity, 
             'image_url': image.image_url.url if image else None,
         })
 
@@ -976,9 +995,8 @@ def remove_from_cart(request, cart_item_id):
 def checkout(request):
     user = request.user
     cart_items = Cart.get_user_cart(user)
-    total_price = sum(item.total_price() for item in cart_items)
+    total_price = sum(item.get_discounted_total() for item in cart_items)
 
-    # Prepare cart data including product image URLs
     cart_data = []
     for item in cart_items:
         image = ProductImage.objects.filter(variant=item.product_variant).first()
@@ -987,76 +1005,61 @@ def checkout(request):
             'product_name': item.product_variant.product.name,
             'color': item.product_variant.color.color_name,
             'size': item.product_variant.size.size_name,
-            'price': item.product_variant.price,
+            'price': item.product_variant.get_discounted_price(),
             'quantity': item.quantity,
-            'total_price': item.total_price(),
+            'total_price': item.get_discounted_total(),
             'image_url': image.image_url.url if image else None,
         })
 
+    discount = 0
+    applied_coupon_code = None
+    shipping_address = None
+
     if request.method == "POST":
-        use_default = request.POST.get("use_default") == "true"
+        if 'coupon_code' in request.POST:
+            coupon_code = request.POST.get("coupon_code")
+            try:
+                coupon = Coupon.objects.get(
+                    coupon_code=coupon_code,
+                    is_active=True,
+                    expiration_date__gt=timezone.now()
+                )
+                
+                if total_price < coupon.min_purchase:
+                    messages.error(request, f"Minimum purchase of ₹{coupon.min_purchase} required")
+                else:
+                    discount = coupon.calculate_discount(total_price)
+                    request.session["applied_coupon"] = coupon_code
+                    request.session["discount"] = float(discount)
+                    applied_coupon_code = coupon_code
+                    messages.success(request, f"Coupon applied! Discount: ₹{discount}")
+            except Coupon.DoesNotExist:
+                messages.error(request, "Invalid coupon code")
 
-        if use_default:
-            # Fetch the default address
-            shipping_address = Address.objects.filter(user=user, is_default=True).first()
-            if not shipping_address:
-                messages.error(request, "No default address found. Please provide an address.")
-                return redirect("checkout")
-
-            # If a default address exists, update it with new details
-            shipping_address.address_line1 = request.POST.get("address_line1", "").strip()
-            shipping_address.city = request.POST.get("city", "").strip()
-            shipping_address.state = request.POST.get("state", "").strip()
-            shipping_address.postal_code = request.POST.get("postal_code", "").strip()
-            shipping_address.country = request.POST.get("country", "").strip()
-
-            # Check if all required fields are provided
-            if not all([shipping_address.address_line1, shipping_address.city, shipping_address.state, shipping_address.postal_code, shipping_address.country]):
-                messages.error(request, "Please fill out all required address fields.")
-                return redirect("checkout")
-
-            shipping_address.save()  # Save the updated address
-            messages.success(request, "Address updated successfully.")
-
+        address_select = request.POST.get("address_select")
+        if address_select:
+            try:
+                shipping_address = Address.objects.get(id=address_select, user=user)
+                request.session["shipping_address_id"] = shipping_address.id
+                messages.success(request, "Shipping address selected successfully.")
+            except Address.DoesNotExist:
+                messages.error(request, "Invalid address selected.")
         else:
-            # Collect new address details from POST data
-            address_line1 = request.POST.get("address_line1", "").strip()
-            city = request.POST.get("city", "").strip()
-            state = request.POST.get("state", "").strip()
-            postal_code = request.POST.get("postal_code", "").strip()
-            country = request.POST.get("country", "").strip()
+            new_address = Address.create_from_request(request)
+            request.session["shipping_address_id"] = new_address.id
+            messages.success(request, "New address added and selected successfully.")
 
-            # Check if all required fields are provided
-            if not all([address_line1, city, state, postal_code, country]):
-                messages.error(request, "Please fill out all required address fields.")
-                return redirect("checkout")
-
-            # Save the new address
-            shipping_address = Address.objects.create(
-                user=user,
-                address_line1=address_line1,
-                address_line2=request.POST.get("address_line2", "").strip(),
-                city=city,
-                state=state,
-                postal_code=postal_code,
-                country=country,
-                is_default=False,  # Do not save as default unless explicitly set
-            )
-            messages.success(request, "Address saved successfully.")
-
-        # Save the shipping address in session for order placement
-        request.session["shipping_address_id"] = shipping_address.id
-
-        return redirect("checkout")  # Proceed to confirm order page
+    selected_address_id = request.session.get("shipping_address_id")
+    if selected_address_id:
+        shipping_address = Address.objects.get(id=selected_address_id, user=user)
 
     return render(request, "user/checkout.html", {
         "cart_items": cart_data,
         "total_price": total_price,
+        "discount": discount,
+        "applied_coupon": applied_coupon_code,
+        "shipping_address": shipping_address,
     })
-
-
-
-
 
 @login_required
 @transaction.atomic
@@ -1068,106 +1071,94 @@ def place_order(request):
         messages.error(request, "Your cart is empty.")
         return redirect("checkout")
 
-    shipping_address_id = request.session.get("shipping_address_id")
-    if not shipping_address_id:
-        messages.error(request, "No shipping address selected. Please go back to checkout.")
-        return redirect("checkout")
-
-    try:
-        shipping_address = Address.objects.get(id=shipping_address_id)
-    except Address.DoesNotExist:
-        messages.error(request, "The selected address is no longer available.")
-        return redirect("checkout")
-
-    total_price = sum(item.total_price() for item in cart_items)
+    subtotal = sum(item.total_price() for item in cart_items)
+    total_discount = request.session.get("discount", 0)
+    final_price = subtotal - total_discount
+    applied_coupon = request.session.get("applied_coupon")
 
     if request.method == "POST":
-        # Handle custom shipping address if selected
-        if request.POST.get("shipping_address"):
-            shipping_first_name = request.POST.get("shipping_first_name")
-            shipping_last_name = request.POST.get("shipping_last_name")
-            shipping_email = request.POST.get("shipping_email")
-            shipping_address_line1 = request.POST.get("shipping_address")
-            shipping_city = request.POST.get("shipping_city")
-            shipping_state = request.POST.get("shipping_state")
-            shipping_postal_code = request.POST.get("shipping_postal_code")
-            shipping_country = request.POST.get("shipping_country")
-            # You could implement validation and saving here for new shipping address
+        payment_method = request.POST.get("payment_method", "cod")
+        shipping_address = get_object_or_404(Address, id=request.session.get("shipping_address_id"))
 
-        # Get payment method
-        payment_method = request.POST.get("payment_method")
-        if not payment_method:
-            messages.error(request, "Please select a payment method.")
-            return redirect("place_order")
-
-        if payment_method not in ["cod", "bank_transfer", "cheque", "paypal"]:
-            messages.error(request, "Invalid payment method.")
-            return redirect("place_order")
-
-        # Create order
         order = Order.objects.create(
             user=user,
             shipping_address=shipping_address,
-            total_amount=total_price,
+            subtotal=subtotal,
+            discount=total_discount,
+            total_amount=final_price,
+            applied_coupon=applied_coupon,
             status="Pending" if payment_method == "cod" else "Processing",
         )
 
-        # Create order items and adjust stock
         for cart_item in cart_items:
-            # Ensure the product_variant is passed when creating OrderItem
+            variant = cart_item.product_variant
+            discounted_price = cart_item.product_variant.get_discounted_price()
+
             OrderItem.objects.create(
                 order=order,
-                product_variant=cart_item.product_variant,  # This fixes the IntegrityError
+                product_variant=variant,
                 quantity=cart_item.quantity,
-                price=cart_item.product_variant.price * cart_item.quantity,  # Total price for the item
+                price=discounted_price,  # Save the discounted price
             )
-            # Update stock quantity
-            cart_item.product_variant.stock_quantity -= cart_item.quantity
-            cart_item.product_variant.save()
 
-        # Clear the user's cart
+            variant.stock_quantity -= cart_item.quantity
+            variant.save()
+
         cart_items.delete()
+        for key in ["applied_coupon", "discount"]:
+            request.session.pop(key, None)
 
-        # Set success message
-        if payment_method == "cod":
-            messages.success(request, "Order placed successfully! Payment will be collected upon delivery.")
-        else:
-            messages.success(request, "Order placed successfully!")
-
+        messages.success(request, "Order placed successfully!")
         return redirect("order_summary", order_id=order.id)
 
     return render(request, "user/place_order.html", {
         "cart_items": cart_items,
-        "shipping_address": shipping_address,
-        "total_price": total_price,
+        "subtotal": subtotal,
+        "total_discount": total_discount,
+        "final_price": final_price,
     })
+
+
 
 @login_required
 def order_summary(request, order_id):
     order = get_object_or_404(Order, id=order_id)
-
-    # Fetch order items, prefetching related ProductVariant and associated ProductImages
     order_items = order.items.all().select_related('product_variant').prefetch_related('product_variant__productimage_set')
 
-    # Prepare order data with image URLs
     order_data = []
     for item in order_items:
-        # Get the first product image for the product variant
-        image = item.product_variant.productimage_set.first()  # Correctly access related images
+        image = item.product_variant.productimage_set.first()
+        original_price = item.product_variant.price  # Original price
+        discounted_price = item.price  # Discounted price stored in OrderItem
+        total_price = discounted_price * item.quantity
+        total_savings = (original_price - discounted_price) * item.quantity  # Savings per item
+        
         order_data.append({
             'product_name': item.product_variant.product.name,
             'color': item.product_variant.color.color_name,
             'size': item.product_variant.size.size_name,
-            'price': item.price,
+            'original_price': original_price,
+            'discounted_price': discounted_price,
             'quantity': item.quantity,
-            'total_price': item.price * item.quantity,
-            'image_url': image.image_url.url if image else None,  # Access the image URL or fallback to None
+            'total_price': total_price,
+            'total_savings': total_savings,
+            'image_url': image.image_url.url if image else None,
         })
+
+    applied_coupon = order.applied_coupon
+    discount = order.get_discount_amount()
+    final_amount = order.get_final_amount()
 
     return render(request, "user/order_summary.html", {
         "order": order,
         "order_items": order_data,
+        "applied_coupon": applied_coupon,
+        "discount": discount,
+        "final_amount": final_amount,
     })
+
+
+
 
 @login_required
 def cancel_order(request, order_id):
@@ -1182,3 +1173,304 @@ def cancel_order(request, order_id):
 
     return redirect("profile")
 
+
+
+# -------------- OFFER MANAGEMENT -------------- #
+
+@require_http_methods(["GET"])
+def offer_list(request):
+    """
+    Render the offer list page.
+    """
+    return render(request, "admin/orders/offer_list.html")
+
+@require_http_methods(["GET"])
+def get_offers(request):
+    """
+    API endpoint to fetch all regular offers (product and category offers).
+    """
+    offers = Offer.objects.all().order_by("-id")
+    offer_list = []
+
+    for offer in offers:
+        offer_data = {
+            "id": offer.id,
+            "type": offer.offer_type,
+            "discount": offer.discount,
+            "valid": offer.is_active,
+            "product": offer.product.name if offer.product else None,
+            "category": offer.category.category_name if offer.category else None,
+            "min_purchase": offer.min_purchase,
+            "start_date": offer.start_date.strftime("%Y-%m-%d %H:%M"),
+            "end_date": offer.end_date.strftime("%Y-%m-%d %H:%M"),
+        }
+        offer_list.append(offer_data)
+
+    return JsonResponse(offer_list, safe=False)
+
+@require_http_methods(["GET"])
+def get_referral_offers(request):
+    """
+    API endpoint to fetch all referral offers.
+    """
+    referral_offers = ReferralOffer.objects.all().order_by("-id")
+    referral_list = []
+
+    for referral in referral_offers:
+        referral_data = {
+            "id": referral.id,
+            "referrer": referral.referrer.username,
+            "referred_user": referral.referred_user.username,
+            "reward_amount": referral.reward_amount,
+            "is_claimed": referral.is_claimed,
+        }
+        referral_list.append(referral_data)
+
+    return JsonResponse(referral_list, safe=False)
+
+@require_http_methods(["DELETE"])
+def delete_offer(request, offer_id):
+    """
+    API endpoint to delete an offer (both regular and referral offers).
+    """
+    try:
+        offer = get_object_or_404(Offer, id=offer_id)
+        offer.delete()
+        return JsonResponse({"message": "Offer deleted successfully!"})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
+    
+@require_http_methods(["GET", "POST"])
+def create_offer(request):
+    if request.method == "GET":
+        products = Product.objects.all()
+        categories = Category.objects.all().exclude(is_deleted=True)
+        users = CustomUser.objects.all()
+        return render(request, "admin/orders/create_offer.html", {"products": products, "categories": categories, "users": users})
+
+    elif request.method == "POST":
+        try:
+            data = request.POST
+            print("Received data:", data)  # Debugging line
+
+            offer_type = data.get("offer_type")
+            discount = float(data.get("discount") or 0)
+            min_purchase = float(data.get("min_purchase") or 0)
+
+            # ✅ Fix: Use default dates if missing
+            start_date_str = data.get("start_date")
+            end_date_str = data.get("end_date")
+
+            if start_date_str:
+                start_date = timezone.datetime.fromisoformat(start_date_str)
+            else:
+                start_date = timezone.now()  # Use current time if missing ✅
+
+            if end_date_str:
+                end_date = timezone.datetime.fromisoformat(end_date_str)
+            else:
+                end_date = start_date + timezone.timedelta(days=30)  # Default to 30 days later ✅
+
+            is_active = data.get("is_active", "true").lower() == "true"
+
+            product = get_object_or_404(Product, id=data["product_id"]) if data.get("product_id") else None
+            category = get_object_or_404(Category, id=data["category_id"]) if data.get("category_id") else None
+
+            offer = Offer.objects.create(
+                offer_type=offer_type,
+                discount=discount,
+                product=product,
+                category=category,
+                min_purchase=min_purchase,
+                start_date=start_date,
+                end_date=end_date,
+                is_active=is_active,
+            )
+
+            if offer_type == "referral":
+                referrer = get_object_or_404(CustomUser, id=data.get("referrer_id"))
+                referred_user = get_object_or_404(CustomUser, id=data.get("referred_user_id"))
+                
+                reward_amount = float(data.get("reward_amount") or 0)
+
+                referral_offer = ReferralOffer.objects.create(
+                    offer=offer,
+                    referrer=referrer,
+                    referred_user=referred_user,
+                    reward_amount=reward_amount,
+                )
+                
+                referrer_wallet, _ = Wallet.objects.get_or_create(user=referrer)
+                referrer_wallet.credit(reward_amount, reason="Referral Reward")
+
+            return JsonResponse({"message": "Offer created successfully!", "id": offer.id})
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+
+
+@require_http_methods(["POST"])
+def toggle_offer_status(request, offer_id):
+    """ Activate or deactivate an offer """
+    offer = get_object_or_404(Offer, id=offer_id)
+    offer.is_active = not offer.is_active
+    offer.save()
+    status = "activated" if offer.is_active else "deactivated"
+    return JsonResponse({"message": f"Offer {status}"})
+
+# -------------- COUPON MANAGEMENT -------------- #
+
+
+def coupon_list(request):
+    page_number = request.GET.get('page', 1)  # Get the current page from the query parameters
+    items_per_page = 10  # Define how many coupons to show per page (adjust as needed)
+    search_query = request.GET.get('search', '')  # Get the search query from the request
+    
+    # Filter coupons based on the search query
+    coupons = Coupon.objects.filter(is_active=True, expiration_date__gte=timezone.now())
+    if search_query:
+        coupons = coupons.filter(coupon_code__icontains=search_query)  # Filter by coupon code
+        # You can add more filters here (e.g., by discount_value or expiration_date)
+
+    # Use Paginator to paginate the coupons
+    paginator = Paginator(coupons, items_per_page)
+    page = paginator.get_page(page_number)
+
+    # Handle AJAX request for paginated results
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' and request.method == "GET":
+        data = [
+            {
+                "id": c.id,
+                "coupon_code": c.coupon_code,
+                "discount_value": float(c.discount_value),
+                "min_purchase": float(c.min_purchase),
+                "valid": c.is_valid(),
+                "usage_limit": c.usage_limit,
+                "used_count": c.used_count,
+                "expiration_date": c.expiration_date.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            for c in page.object_list  # Only include coupons for the current page
+        ]
+        
+        response_data = {
+            "coupons": data,
+            "has_next": page.has_next(),
+            "has_previous": page.has_previous(),
+            "next_page_number": page.next_page_number() if page.has_next() else None,
+            "previous_page_number": page.previous_page_number() if page.has_previous() else None,
+        }
+        return JsonResponse(response_data, safe=False)
+
+    # Regular page rendering for first load or page navigation
+    return render(request, 'admin/orders/coupon_list.html', {'coupons': page})
+
+def add_coupon(request):
+    if request.method == 'POST':
+        coupon_code = request.POST.get('coupon_code')
+        discount_type = request.POST.get('discount_type')  # Ensure this is being sent
+        discount_value = request.POST.get('discount_value')
+        max_discount = request.POST.get('max_discount')
+        min_purchase = request.POST.get('min_purchase')
+        usage_limit = request.POST.get('usage_limit')
+        per_user_limit = request.POST.get('per_user_limit')
+        expiration_date = request.POST.get('expiration_date')
+        allowed_categories = request.POST.getlist('allowed_categories')  # Multiple categories selected
+        allowed_users = request.POST.getlist('allowed_users')  # Multiple users selected
+
+        # Fallback to 'fixed' if discount_type is not provided
+        if not discount_type:
+            discount_type = 'fixed'
+
+        # Creating the coupon instance
+        coupon = Coupon(
+            coupon_code=coupon_code,
+            discount_type=discount_type,
+            discount_value=discount_value,
+            max_discount=max_discount,
+            min_purchase=min_purchase,
+            usage_limit=usage_limit,
+            per_user_limit=per_user_limit,
+            expiration_date=expiration_date,
+        )
+        coupon.save()
+        
+        # Add allowed categories and users to the coupon
+        coupon.allowed_categories.set(allowed_categories)
+        coupon.allowed_users.set(allowed_users)
+        
+        return redirect('coupon_list')  # Redirect to coupon list after creation
+
+    categories = Category.objects.all()  # Assuming Category is a model in your app
+    users = CustomUser.objects.all()  # Assuming CustomUser is the user model
+    return render(request, 'admin/orders/add_coupon.html', {'categories': categories, 'users': users})
+
+
+def edit_coupon(request, coupon_id):
+    coupon = get_object_or_404(Coupon, id=coupon_id)
+    if request.method == 'POST':
+        coupon.coupon_code = request.POST.get('coupon_code')
+        coupon.discount_type = request.POST.get('discount_type')
+        coupon.discount_value = request.POST.get('discount_value')
+        coupon.max_discount = request.POST.get('max_discount')
+        coupon.min_purchase = request.POST.get('min_purchase')
+        coupon.usage_limit = request.POST.get('usage_limit')
+        coupon.per_user_limit = request.POST.get('per_user_limit')
+        coupon.expiration_date = request.POST.get('expiration_date')
+        coupon.allowed_categories.set(request.POST.getlist('allowed_categories'))
+        coupon.allowed_users.set(request.POST.getlist('allowed_users'))
+        coupon.save()
+        return redirect('coupon_list')
+    
+    categories = Category.objects.all()
+    users = CustomUser.objects.all()
+    return render(request, 'coupon/edit_coupon.html', {'coupon': coupon, 'categories': categories, 'users': users})
+
+
+
+def delete_coupon(request, coupon_id):
+    coupon = get_object_or_404(Coupon, id=coupon_id)
+    coupon.delete()  # Delete the coupon
+    return redirect('coupon_list')  # Redirect to the coupon list page
+
+
+@require_http_methods(["POST"])
+def validate_coupon(request):
+    try:
+        data = json.loads(request.body)
+        coupon_code = data.get("coupon_code")
+        order_total = float(data.get("order_total", 0))
+
+        coupon = Coupon.objects.get(
+            coupon_code=coupon_code,
+            is_active=True,
+            expiration_date__gt=timezone.now()
+        )
+
+        # Check temporary usage
+        temp_usage = request.session.get('temp_coupon_usage', {})
+        temp_count = temp_usage.get(coupon_code, 0)
+        
+        if (coupon.used_count + temp_count) >= coupon.usage_limit:
+            return JsonResponse({"error": "Coupon usage limit reached"}, status=400)
+
+        if order_total < coupon.min_purchase:
+            return JsonResponse({"error": f"Minimum purchase of ₹{coupon.min_purchase} required"}, status=400)
+
+        # Calculate actual discount
+        if coupon.discount_type == "fixed":
+            discount = min(coupon.discount_value, order_total)
+        elif coupon.discount_type == "percentage":
+            discount = (coupon.discount_value / 100) * order_total
+            if coupon.max_discount:
+                discount = min(discount, coupon.max_discount)
+
+        return JsonResponse({
+            "message": "Coupon valid",
+            "discount": discount,
+            "coupon_code": coupon_code
+        })
+
+    except Coupon.DoesNotExist:
+        return JsonResponse({"error": "Invalid coupon"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)

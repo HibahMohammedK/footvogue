@@ -106,14 +106,34 @@
                         {% endfor %}
                     </div>
                     <div class="order-col">
+                        <div><strong>Apply Coupon</strong></div>
+                        <div>
+                            <input type="text" id="coupon_code" placeholder="Enter coupon code">
+                            <button type="button" id="apply_coupon_btn" onclick="applyCoupon()" class="primary-btn">Apply</button>
+                        </div>
+                        <p id="coupon_message" style="color: red; display: none;"></p>
+                    </div>
+                    <div class="order-col">
                         <div>Shipping</div>
                         <div><strong>FREE</strong></div>
                     </div>
                     <div class="order-col">
+                        <div><strong>Subtotal</strong></div>
+                        <div><strong id="subtotal">${{ total_price|floatformat:2 }}</strong></div>
+                    </div>
+
+                    <div class="order-col" id="discount-row" style="display: none;">
+                        <div>Coupon Discount</div>
+                        <div><strong id="discount-amount">-${{ discount|floatformat:2 }}</strong></div>
+                    </div>
+
+                    <div class="order-col">
                         <div><strong>TOTAL</strong></div>
-                        <div><strong class="order-total">${{ total_price|floatformat:2 }}</strong></div>
+                        <div><strong class="order-total" id="final-total">${{ total_price|floatformat:2 }}</strong></div>
                     </div>
                 </div>
+
+                <input type="hidden" id="discount_value" name="discount_value" value="0">
                 <form method="POST" action="{% url 'place_order' %}">
                     {% csrf_token %}
                     <div class="payment-method">
@@ -135,7 +155,7 @@
                         </div>
                     </div>
                     <div class="input-checkbox">
-                        <input type="checkbox" id="terms" required>
+                        <input type="checkbox" id="terms">
                         <label for="terms"><span></span>I've read and accept the <a href="#">terms & conditions</a></label>
                     </div>
                     <button type="submit" class="primary-btn order-submit">Place Order</button>
@@ -174,5 +194,53 @@
             document.getElementById("country").value = selectedOption.getAttribute("data-country");
         }
     }
+
+    function applyCoupon() {
+        let couponCode = document.getElementById("coupon_code").value;
+        let orderTotal = parseFloat("{{ total_price }}");  // Fetch from template context
+
+        if (!couponCode) {
+            let messageBox = document.getElementById("coupon_message");
+            messageBox.textContent = "Please enter a coupon code.";
+            messageBox.style.color = "red";
+            messageBox.style.display = "block";
+            return;
+        }
+
+        fetch("{% url 'validate_coupon' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({ coupon_code: couponCode, order_total: orderTotal })
+        })
+        .then(response => response.json())
+        .then(data => {
+            let messageBox = document.getElementById("coupon_message");
+
+            if (data.error) {
+                messageBox.textContent = data.error;
+                messageBox.style.color = "red";
+                messageBox.style.display = "block";
+            } else {
+                let discount = parseFloat(data.discount);
+                let newTotal = orderTotal - discount;
+
+                document.getElementById("discount-amount").textContent = "-$" + discount.toFixed(2);
+                document.getElementById("final-total").textContent = "$" + newTotal.toFixed(2);
+                document.getElementById("discount-row").style.display = "flex";  // Show discount row
+
+                messageBox.textContent = "Coupon applied successfully!";
+                messageBox.style.color = "green";
+                messageBox.style.display = "block";
+            }
+        })
+        .catch(error => {
+            console.error("Error:", error);
+        });
+    }
+
+
 </script>
 {% endblock %}
