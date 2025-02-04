@@ -26,6 +26,7 @@ import pandas as pd
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from reportlab.pdfgen import canvas
+import razorpay
 
    
 
@@ -1004,6 +1005,17 @@ def checkout(request):
     user = request.user
     cart_items = Cart.get_user_cart(user)
     total_price = sum(item.get_discounted_total() for item in cart_items)
+    total_price_paise = int(total_price * 100) 
+
+
+    # Razorpay setup
+    client = razorpay.Client(auth=(settings.RAZORPAY_API_KEY, settings.RAZORPAY_API_SECRET))
+    razorpay_order = client.order.create({
+        'amount': int(total_price * 100),  # Amount in paise
+        'currency': 'INR',
+        'payment_capture': '1',
+    })
+    razorpay_order_id = razorpay_order['id']  # Only pass order_id, no need for signature here
 
     cart_data = []
     for item in cart_items:
@@ -1032,7 +1044,6 @@ def checkout(request):
                     is_active=True,
                     expiration_date__gt=timezone.now()
                 )
-                
                 if total_price < coupon.min_purchase:
                     messages.error(request, f"Minimum purchase of ₹{coupon.min_purchase} required")
                 else:
@@ -1065,9 +1076,12 @@ def checkout(request):
         "cart_items": cart_data,
         "total_price": total_price,
         "discount": discount,
+        "total_price_paise": total_price_paise,
         "applied_coupon": applied_coupon_code,
         "shipping_address": shipping_address,
+        'razorpay_order_id': razorpay_order_id,  # Only pass razorpay_order_id
     })
+
 
 @login_required
 @transaction.atomic
@@ -1088,36 +1102,99 @@ def place_order(request):
         payment_method = request.POST.get("payment_method", "cod")
         shipping_address = get_object_or_404(Address, id=request.session.get("shipping_address_id"))
 
-        order = Order.objects.create(
-            user=user,
-            shipping_address=shipping_address,
-            subtotal=subtotal,
-            discount=total_discount,
-            total_amount=final_price,
-            applied_coupon=applied_coupon,
-            status="Pending" if payment_method == "cod" else "Processing",
-        )
+        # If payment is done via Razorpay
+        if payment_method == "razorpay":
+            # Ensure these are not None
+            razorpay_payment_id = request.POST.get('razorpay_payment_id')
+            razorpay_order_id = request.POST.get('razorpay_order_id')
+            razorpay_signature = request.POST.get('razorpay_signature')
+            
+            if not all([razorpay_payment_id, razorpay_order_id, razorpay_signature]):
+                messages.error(request, "Payment details missing")
+                return redirect("checkout")
+            # Verify payment signature
+            client = razorpay.Client(auth=(settings.RAZORPAY_API_KEY, settings.RAZORPAY_API_SECRET))
 
-        for cart_item in cart_items:
-            variant = cart_item.product_variant
-            discounted_price = cart_item.product_variant.get_discounted_price()
+            params_dict = {
+                'razorpay_order_id': razorpay_order_id,
+                'razorpay_payment_id': razorpay_payment_id,
+                'razorpay_signature': razorpay_signature,
+            }
+            try:
+                client.utility.verify_payment_signature(params_dict)
+                payment_status = 'Paid'
+            except razorpay.errors.SignatureVerificationError:
+                payment_status = 'Failed'
 
-            OrderItem.objects.create(
-                order=order,
-                product_variant=variant,
-                quantity=cart_item.quantity,
-                price=discounted_price,  # Save the discounted price
+            if payment_status == 'Paid':
+                # Create the order if payment is successful
+                order = Order.objects.create(
+                    user=user,
+                    shipping_address=shipping_address,
+                    subtotal=subtotal,
+                    discount=total_discount,
+                    total_amount=final_price,
+                    applied_coupon=applied_coupon,
+                    status="Processing",
+                    payment_status='Paid',
+                )
+
+                for cart_item in cart_items:
+                    variant = cart_item.product_variant
+                    discounted_price = cart_item.product_variant.get_discounted_price()
+
+                    OrderItem.objects.create(
+                        order=order,
+                        product_variant=variant,
+                        quantity=cart_item.quantity,
+                        price=discounted_price,
+                    )
+
+                    variant.stock_quantity -= cart_item.quantity
+                    variant.save()
+
+                # Clear cart and session details
+                cart_items.delete()
+                for key in ["applied_coupon", "discount"]:
+                    request.session.pop(key, None)
+
+                messages.success(request, "Order placed successfully!")
+                return redirect("order_summary", order_id=order.id)  # Ensure this redirect is correct
+            else:
+                messages.error(request, "Payment failed. Please try again.")
+                return redirect("checkout")
+
+        else:  # COD or other payment methods
+            order = Order.objects.create(
+                user=user,
+                shipping_address=shipping_address,
+                subtotal=subtotal,
+                discount=total_discount,
+                total_amount=final_price,
+                applied_coupon=applied_coupon,
+                status="Pending",
             )
 
-            variant.stock_quantity -= cart_item.quantity
-            variant.save()
+            for cart_item in cart_items:
+                variant = cart_item.product_variant
+                discounted_price = cart_item.product_variant.get_discounted_price()
 
-        cart_items.delete()
-        for key in ["applied_coupon", "discount"]:
-            request.session.pop(key, None)
+                OrderItem.objects.create(
+                    order=order,
+                    product_variant=variant,
+                    quantity=cart_item.quantity,
+                    price=discounted_price,
+                )
 
-        messages.success(request, "Order placed successfully!")
-        return redirect("order_summary", order_id=order.id)
+                variant.stock_quantity -= cart_item.quantity
+                variant.save()
+
+            cart_items.delete()
+            for key in ["applied_coupon", "discount"]:
+                request.session.pop(key, None)
+
+            messages.success(request, "Order placed successfully!")
+            return redirect("order_summary", order_id=order.id)  # Ensure this redirect is correct
 
     return render(request, "user/place_order.html", {
         "cart_items": cart_items,
