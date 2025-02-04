@@ -57,7 +57,15 @@
 						<li><a href="#"><i class="fa fa-map-marker"></i> 1734 Stonecoal Road</a></li>
 					</ul>
 					<ul class="header-links pull-right">
-						<li><a href="#"><i class="fa fa-dollar"></i> USD</a></li>
+						<li><!-- Wallet -->
+							<div>
+								<a href="{% url 'wallet' %}" class="nav-link">
+									<i class="fa fa-wallet"></i> 
+									<span>Your Wallet</span>
+									
+								</a>
+							</div>
+							<!-- /Wallet --></li>
 						{% if user.is_authenticated %}
 							<li><a href="{% url 'profile' %}"><i class="fa fa-user-o"></i>{{ user.get_full_name|default:user.username }}
 							</a></li>
@@ -107,6 +115,8 @@
 						<!-- ACCOUNT -->
 						<div class="col-md-3 clearfix">
 							<div class="header-ctn">
+								
+								
 								<!-- Wishlist -->
 								<div>
 									<a href="{% url 'wishlist_view' %}">
