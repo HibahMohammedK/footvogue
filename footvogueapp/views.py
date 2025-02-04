@@ -1742,3 +1742,16 @@ def remove_from_wishlist(request):
         return JsonResponse({"status": "removed"})
 
     return JsonResponse({"status": "error"}, status=400)
+
+@login_required
+def wallet_view(request):
+    # Get the wallet of the logged-in user
+    try:
+        wallet = request.user.wallet
+    except Wallet.DoesNotExist:
+        wallet = None
+
+    # Render the wallet page with the wallet balance
+    return render(request, "user/wallet.html", {
+        "wallet": wallet,
+    })

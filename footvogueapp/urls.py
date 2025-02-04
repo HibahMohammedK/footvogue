@@ -83,6 +83,8 @@ urlpatterns = [
     path('wishlist/remove/<int:variant_id>/', views.remove_from_wishlist, name='remove_from_wishlist'),
     path('wishlist/add_to_cart/<int:variant_id>/', views.add_to_cart_from_wishlist, name='add_to_cart_from_wishlist'),
 
+    path("wallet/", views.wallet_view, name="wallet"),
+
 ]
 
 
