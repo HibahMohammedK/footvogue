@@ -134,32 +134,33 @@
                 </div>
 
                 <input type="hidden" id="discount_value" name="discount_value" value="0">
-                <form method="POST" action="{% url 'place_order' %}">
+                <form id="checkout-form" method="POST" action="{% url 'place_order' %}">
                     {% csrf_token %}
-                    <div class="payment-method">
-                        <div class="input-radio">
-                            <input type="radio" name="payment_method" id="payment-1" value="bank_transfer" required>
-                            <label for="payment-1"><span></span>Bank Transfer</label>
-                        </div>
-                        <div class="input-radio">
-                            <input type="radio" name="payment_method" id="payment-2" value="cheque">
-                            <label for="payment-2"><span></span>Cheque Payment</label>
-                        </div>
-                        <div class="input-radio">
-                            <input type="radio" name="payment_method" id="payment-3" value="paypal">
-                            <label for="payment-3"><span></span>PayPal</label>
-                        </div>
-                        <div class="input-radio">
-                            <input type="radio" name="payment_method" id="payment-4" value="cod">
-                            <label for="payment-4"><span></span>Cash on Delivery</label>
-                        </div>
+                    
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-razorpay" value="razorpay">
+                        <label for="payment-razorpay"><span></span>Razorpay</label>
                     </div>
-                    <div class="input-checkbox">
-                        <input type="checkbox" id="terms">
-                        <label for="terms"><span></span>I've read and accept the <a href="#">terms & conditions</a></label>
+                    
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-4" value="cod">
+                        <label for="payment-4"><span></span>Cash on Delivery</label>
                     </div>
+                
+                    <!-- Razorpay Payment Button (Initially Hidden) -->
+                    <button id="razorpay-button" class="btn btn-primary" style="display: none;">Pay with Razorpay</button>
+                
+                    <!-- Hidden Form to Submit Razorpay Payment Details -->
+                    
+                        {% csrf_token %}
+                        <input type="hidden" name="payment_method" value="razorpay">
+                        <input type="hidden" id="razorpay_payment_id" name="razorpay_payment_id">
+                        <input type="hidden" id="razorpay_order_id" name="razorpay_order_id" value="{{ razorpay_order_id }}">
+                        <input type="hidden" id="razorpay_signature" name="razorpay_signature">
+                   
                     <button type="submit" class="primary-btn order-submit">Place Order</button>
                 </form>
+                
             </div>
         </div>
     </div>
@@ -180,7 +181,7 @@
         margin-bottom: 10px;
     }
 </style>
-
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
     function fillAddressFields() {
         const select = document.getElementById("address_select");
@@ -240,6 +241,50 @@
             console.error("Error:", error);
         });
     }
+        
+        document.addEventListener("DOMContentLoaded", function() {
+        var razorpayRadio = document.getElementById("payment-razorpay");
+        var codRadio = document.getElementById("payment-4");
+        var razorpayButton = document.getElementById("razorpay-button");
+
+        // Show Razorpay button only if Razorpay is selected
+        razorpayRadio.addEventListener("change", function() {
+            razorpayButton.style.display = "block";
+        });
+
+        codRadio.addEventListener("change", function() {
+            razorpayButton.style.display = "none";
+        });
+
+        // Razorpay Payment Processing
+        razorpayButton.onclick = function(e) {
+            e.preventDefault();
+
+            var options = {
+                "key": "{{ razorpay_key_id }}", // Razorpay API Key from Django view
+                "amount": "{{ final_price|floatformat:2 }}" * 100, // Convert to paise
+                "currency": "INR",
+                "name": "Foot Vogue",
+                "description": "Order Payment",
+                "order_id": "{{ razorpay_order_id }}", // Generated in Django view
+                "handler": function(response) {
+                    // Set hidden fields with payment details
+                    document.getElementById("razorpay_payment_id").value = response.razorpay_payment_id;
+                    document.getElementById("razorpay_order_id").value = response.razorpay_order_id;
+                    document.getElementById("razorpay_signature").value = response.razorpay_signature;
+                    
+                    // Submit form to process payment on backend
+                    document.getElementById("payment-form").submit();
+                },
+                "theme": {
+                    "color": "#3399cc"
+                }
+            };
+
+            var rzp1 = new Razorpay(options);
+            rzp1.open();
+        };
+    });
 
 
 </script>
