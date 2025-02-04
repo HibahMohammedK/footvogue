@@ -21,6 +21,11 @@ from django.http import JsonResponse
 import json
 from django.views.decorators.http import require_http_methods
 from dateutil import parser
+import datetime
+import pandas as pd
+from django.shortcuts import render
+from django.http import JsonResponse, HttpResponse
+from reportlab.pdfgen import canvas
 
    
 
@@ -698,6 +703,7 @@ def product_details(request, product_id, variant_id=None):
         total_ratings = ratings.count()
         related_product.avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
 
+
     context = {
         'product': product,
         'selected_variant': selected_variant,
@@ -713,7 +719,8 @@ def product_details(request, product_id, variant_id=None):
         'product_offer': product_offer,
         'category_offer': category_offer,
         'discounted_price': discounted_price,
-        'original_price': selected_variant.price
+        'original_price': selected_variant.price,
+
     }
     return render(request, 'user/product_details.html', context)
 
@@ -1476,11 +1483,7 @@ def validate_coupon(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
 
-import datetime
-import pandas as pd
-from django.shortcuts import render
-from django.http import JsonResponse, HttpResponse
-from reportlab.pdfgen import canvas
+
 
 def sales_report(request):
     """Handles sales report filtering and downloading."""
@@ -1584,3 +1587,81 @@ def download_sales_report(request, report_type):
         return response
 
     return JsonResponse({"error": "Invalid report type"}, status=400)
+
+@login_required
+def wishlist_view(request):
+    wishlist_items = Wishlist.objects.filter(user=request.user)
+
+    wishlist_data = []
+    for item in wishlist_items:
+        variant = item.product_variant
+        image = ProductImage.objects.filter(variant=variant).first()
+
+        wishlist_data.append({
+            'id': item.id,
+            'variant_id': variant.id,  # Ensure this is passed correctly
+            'product_name': variant.product.name,
+            'color': variant.color.color_name,
+            'size': variant.size.size_name,
+            'price': variant.price,
+            'image_url': image.image_url.url if image else None,
+        })
+
+    return render(request, 'user/wishlist.html', {
+        'wishlist_items': wishlist_data,  # Only passing wishlist items
+    })
+
+
+
+
+@login_required
+def wishlist_item_count(request):
+    """ Return the total wishlist item count dynamically """
+    wishlist_count = Wishlist.objects.filter(user=request.user).count()
+    return JsonResponse({"wishlist_count": wishlist_count})
+
+@login_required
+def add_to_wishlist(request, variant_id):
+    product_variant = get_object_or_404(ProductVariant, id=variant_id)
+    wishlist_item, created = Wishlist.objects.get_or_create(user=request.user, product_variant=product_variant)
+
+    if created:
+        message = "Item added to wishlist."
+    else:
+        message = "Item is already in your wishlist."
+
+    return redirect('wishlist_view')  # Redirect to the wishlist page
+
+@login_required
+def add_to_cart_from_wishlist(request, variant_id):
+    variant = get_object_or_404(ProductVariant, id=variant_id)
+
+    # Get or create the cart item
+    cart_item, created = Cart.objects.get_or_create(user=request.user, product_variant=variant)
+
+    if created:
+        cart_item.quantity = 1  # Default quantity
+    else:
+        if cart_item.quantity < variant.stock_quantity:
+            cart_item.quantity += 1  # Increase quantity
+        else:
+            return HttpResponse("Not enough stock.", status=400)
+
+    cart_item.save()
+
+    # Remove the item from the wishlist after adding to cart
+    Wishlist.objects.filter(user=request.user, product_variant=variant).delete()
+
+    return redirect('cart_view')  # Redirect to cart view
+
+
+
+@login_required
+def remove_from_wishlist(request):
+    if request.method == "POST":
+        item_id = request.POST.get("item_id")
+        wishlist_item = get_object_or_404(Wishlist, id=item_id, user=request.user)
+        wishlist_item.delete()
+        return JsonResponse({"status": "removed"})
+
+    return JsonResponse({"status": "error"}, status=400)

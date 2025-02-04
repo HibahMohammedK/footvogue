@@ -166,7 +166,15 @@
 
                             <!-- Wishlist and Categories -->
                             <ul class="product-btns">
-                                <li><a href="#"><i class="fa fa-heart-o"></i> Add to Wishlist</a></li>
+                                <li>
+                                    {% if selected_variant %}
+                                        <a href="{% url 'add_to_wishlist' selected_variant.id %}">
+                                            <i class="fa fa-heart-o"></i> Add to Wishlist
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">No variants available</span>
+                                    {% endif %}
+                                </li>
                             </ul>
                            <!-- Product Variant Colors -->
                             <div class="product-options">
@@ -415,9 +423,9 @@
                         {% endfor %}
                     </div>
                     <div class="product-btns">
-                        <button class="add-to-wishlist">
+                        <a href="{% url 'add_to_wishlist' product.id %}"><button class="add-to-wishlist">
                             <i class="fa fa-heart-o"></i><span class="tooltipp">add to wishlist</span>
-                        </button>
+                        </button></a>
                         <button class="add-to-compare">
                             <i class="fa fa-exchange"></i><span class="tooltipp">add to compare</span>
                         </button>
@@ -428,9 +436,9 @@
                 </div>
             </a>
             <div class="add-to-cart">
-                <button class="add-to-cart-btn">
+                <a href="#"><button class="add-to-cart-btn">
                     <i class="fa fa-shopping-cart"></i> add to cart
-                </button>
+                </button></a>
             </div>
         </div>
     </div>
@@ -552,4 +560,7 @@
             });
         });
     });
+
+    
+
 </script>

@@ -394,3 +394,11 @@ class Referral(models.Model):
                 self.referrer.wallet.credit(referral_offer.reward_amount)
                 self.reward_claimed = True
                 self.save()
+
+class Wishlist(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    product_variant = models.ForeignKey('ProductVariant', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'product_variant')  # Prevent duplicate wishlist entries
