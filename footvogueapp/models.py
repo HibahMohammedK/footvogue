@@ -18,6 +18,17 @@ class CustomUser(AbstractUser):
     is_staff = models.BooleanField(default=False)  # Whether the user is an admin
     created_at = models.DateTimeField(auto_now_add=True)  # Timestamp when the user was created
     updated_at = models.DateTimeField(auto_now=True)  # Timestamp when the user was last updated
+    referral_code = models.CharField(max_length=20, unique=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.referral_code:
+            self.referral_code = self.generate_referral_code()
+        super().save(*args, **kwargs)
+
+    def generate_referral_code(self):
+        # Generate a unique referral code (e.g., user ID + random string)
+        import uuid
+        return f"REF-{self.id}-{uuid.uuid4().hex[:6]}"
 
     def __str__(self):
         return self.username  # Return the username when the user is printed
@@ -397,7 +408,7 @@ class Offer(models.Model):
 
 class ReferralOffer(models.Model):
     offer = models.OneToOneField(Offer, on_delete=models.CASCADE, related_name="referral_offer")
-    reward_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reward_amount = models.DecimalField(max_digits=10, decimal_places=2, default=100.00)  # Default ₹100
 
 class Referral(models.Model):
     referrer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="referrals_made")
@@ -408,7 +419,25 @@ class Referral(models.Model):
         if not self.reward_claimed:
             referral_offer = ReferralOffer.objects.first()  # Assuming a single referral offer
             if referral_offer:
+                # Credit both referrer and referee wallets
                 self.referrer.wallet.credit(referral_offer.reward_amount)
+                self.referred_user.wallet.credit(referral_offer.reward_amount)
+
+                # Create transactions for both users
+                Transaction.objects.create(
+                    wallet=self.referrer.wallet,
+                    amount=referral_offer.reward_amount,
+                    transaction_type='Credit',
+                    status='Completed',
+                )
+                Transaction.objects.create(
+                    wallet=self.referred_user.wallet,
+                    amount=referral_offer.reward_amount,
+                    transaction_type='Credit',
+                    status='Completed',
+                )
+
+                # Mark the reward as claimed
                 self.reward_claimed = True
                 self.save()
 

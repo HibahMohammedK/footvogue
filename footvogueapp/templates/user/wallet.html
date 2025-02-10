@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container mt-5">
     <h2 class="mb-4">My Wallet</h2>
-    
+
     <div class="card p-3 mb-4">
         <h4>Wallet Balance: ₹{{ wallet.balance }}</h4>
     </div>
@@ -22,8 +22,16 @@
             {% for transaction in transactions %}
             <tr>
                 <td>{{ transaction.created_at|date:"d M Y, h:i A" }}</td>
-                <td>{{ transaction.get_transaction_type_display }}</td>
-                <td>{{ transaction.amount }}</td>
+                <td>
+                    {% if transaction.transaction_type == "Credit" %}
+                        <span class="text-success">Credit</span>
+                    {% elif transaction.transaction_type == "Debit" %}
+                        <span class="text-danger">Debit</span>
+                    {% else %}
+                        <span class="text-secondary">Unknown</span>
+                    {% endif %}
+                </td>
+                <td>₹{{ transaction.amount }}</td>
                 <td>
                     {% if transaction.status == "Completed" %}
                         <span class="badge bg-success">Completed</span>
