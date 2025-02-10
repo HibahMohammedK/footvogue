@@ -1,13 +1,16 @@
 {% extends "user/home.html" %}
 {% load socialaccount %}
 {% block content %}
+
 <!-- REGISTER SECTION -->
-<div id="register" class="section" style="background-color: #f9f9f9; padding: 60px 0;">
+<div id="login" class="section d-flex justify-content-center align-items-center vh-100" 
+style="background: url('/static/img/login_back.PNG') no-repeat center center/cover; padding: 90px 0;">
+<div id="register" class="section">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-md-6">
                 <div class="card shadow-lg p-4">
-                    <h2 class="text-center mb-4" style="color: #333;">Register at <strong>Foot Vogue</strong></h2>
+                    <h2 class="mb-4 text-center" style="color: #f1e7e7; background-color: rgba(17, 17, 17, 0.986); border-radius: 6rem;"><strong>Sign-up</strong></h2>
 
                     <!-- Register Form -->
                     <form method="POST" action="{% url 'register' %}" id="register-form">
@@ -40,10 +43,12 @@
 
                         <!-- Submit button -->
                         <button type="submit"  class="primary-btn order-submit"> Register</button>
-                    </form>
-                    <a href="{% provider_login_url 'google' %}" class="btn btn-google">
-                        Register with Google
+                    </form><br>
+                    <a href="{% provider_login_url 'google' %}" class="btn btn-google"  style="color: #f1e7e7; background-color: rgba(240, 234, 234, 0.315); border-radius: 6rem;">
+                        <i class="fa fa-google"></i> Sign Up with Google
                     </a>
+                    
+
                      <!-- Messages -->
                      {% if messages %}
                      <div class="mt-3 text-center">
@@ -58,7 +63,7 @@
                     <p class="mt-3 text-center">Already have an account? <a href="{% url 'login' %}">Login here</a></p>
 
                     <!-- Social media links -->
-                    <ul class="newsletter-follow text-center">
+                    <ul class="newsletter-follow text-center ">
                         <li><a href="#"><i class="fa fa-facebook"></i></a></li>
                         <li><a href="#"><i class="fa fa-twitter"></i></a></li>
                         <li><a href="#"><i class="fa fa-instagram"></i></a></li>
@@ -68,6 +73,7 @@
             </div>
         </div>
     </div>
+</div>
 </div>
 <!-- /REGISTER SECTION -->
 

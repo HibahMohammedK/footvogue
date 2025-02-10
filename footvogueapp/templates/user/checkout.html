@@ -242,50 +242,69 @@
         });
     }
         
-        document.addEventListener("DOMContentLoaded", function() {
-        var razorpayRadio = document.getElementById("payment-razorpay");
-        var codRadio = document.getElementById("payment-4");
-        var razorpayButton = document.getElementById("razorpay-button");
+  
+document.addEventListener("DOMContentLoaded", function() {
+    var razorpayRadio = document.getElementById("payment-razorpay");
+    var codRadio = document.getElementById("payment-4");
+    var razorpayButton = document.getElementById("razorpay-button");
 
-        // Show Razorpay button only if Razorpay is selected
-        razorpayRadio.addEventListener("change", function() {
-            razorpayButton.style.display = "block";
-        });
-
-        codRadio.addEventListener("change", function() {
-            razorpayButton.style.display = "none";
-        });
-
-        // Razorpay Payment Processing
-        razorpayButton.onclick = function(e) {
-            e.preventDefault();
-
-            var options = {
-                "key": "{{ razorpay_key_id }}", // Razorpay API Key from Django view
-                "amount": "{{ final_price|floatformat:2 }}" * 100, // Convert to paise
-                "currency": "INR",
-                "name": "Foot Vogue",
-                "description": "Order Payment",
-                "order_id": "{{ razorpay_order_id }}", // Generated in Django view
-                "handler": function(response) {
-                    // Set hidden fields with payment details
-                    document.getElementById("razorpay_payment_id").value = response.razorpay_payment_id;
-                    document.getElementById("razorpay_order_id").value = response.razorpay_order_id;
-                    document.getElementById("razorpay_signature").value = response.razorpay_signature;
-                    
-                    // Submit form to process payment on backend
-                    document.getElementById("payment-form").submit();
-                },
-                "theme": {
-                    "color": "#3399cc"
-                }
-            };
-
-            var rzp1 = new Razorpay(options);
-            rzp1.open();
-        };
+    // Show Razorpay button only if Razorpay is selected
+    razorpayRadio.addEventListener("change", function() {
+        razorpayButton.style.display = "block";
     });
 
+    codRadio.addEventListener("change", function() {
+        razorpayButton.style.display = "none";
+    });
+
+    // Razorpay Payment Processing
+    razorpayButton.onclick = function(e) {
+        e.preventDefault();
+
+        var options = {
+            "key": "{{ razorpay_key_id }}", // Razorpay API Key from Django view
+            "amount": "{{ final_price|floatformat:2 }}" * 100, // Convert to paise
+            "currency": "INR",
+            "name": "Foot Vogue",
+            "description": "Order Payment",
+            "order_id": "{{ razorpay_order_id }}", // Generated in Django view
+            "handler": function(response) {
+                // Set hidden fields with payment details
+                document.getElementById("razorpay_payment_id").value = response.razorpay_payment_id;
+                document.getElementById("razorpay_order_id").value = response.razorpay_order_id;
+                document.getElementById("razorpay_signature").value = response.razorpay_signature;
+
+                // Submit form via AJAX to process order and redirect to order summary
+                var formData = new FormData(document.getElementById("payment-form"));
+
+                fetch("{% url 'place_order' %}", {
+                    method: "POST",
+                    body: formData,
+                    headers: {
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Redirect to order summary
+                        window.location.href = "/order_summary/" + data.order_id + "/";
+                    } else {
+                        alert("Payment processing failed. Please try again.");
+                    }
+                })
+                .catch(error => console.error("Error:", error));
+            },
+            "theme": {
+                "color": "#3399cc"
+            }
+        };
+
+        var rzp1 = new Razorpay(options);
+        rzp1.open();
+    };
+});
 
 </script>
+
 {% endblock %}

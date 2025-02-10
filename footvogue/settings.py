@@ -86,7 +86,7 @@ WSGI_APPLICATION = 'footvogue.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'db_footvogue',
+        'NAME': 'footvogue_db1',
         'USER': 'postgres',
         'PASSWORD': 'REDACTED',
         'HOST': 'localhost',

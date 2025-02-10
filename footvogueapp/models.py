@@ -441,3 +441,31 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.transaction_type} - ₹{self.amount} - {self.status}"
+    
+
+class ReturnReason(models.Model):
+    reason_text = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.reason_text
+
+
+class ReturnRequest(models.Model):
+    STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Approved', 'Approved'),
+        ('Rejected', 'Rejected'),
+    ]
+
+    order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name="returns")
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    reason = models.ForeignKey(ReturnReason, on_delete=models.SET_NULL, null=True, blank=True)
+    additional_notes = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Return Request {self.id} - {self.status}"

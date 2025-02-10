@@ -63,82 +63,100 @@
                             <h2 class="product-name">{{ product.name }}</h2>
 
                             <!-- Product Rating -->
-                            <div>
-                                <div class="product-rating">
-                                    <i class="fa fa-star"></i>
-                                    <i class="fa fa-star"></i>
-                                    <i class="fa fa-star"></i>
-                                    <i class="fa fa-star"></i>
-                                    <i class="fa fa-star-o"></i>
+                            <div class="product-rating">
+                                <div class="stars">
+                                    {% for _ in filled_stars_range %}
+                                        <i class="fa fa-star"></i>
+                                    {% endfor %}
+                                    {% for _ in empty_stars_range %}
+                                        <i class="fa fa-star-o"></i>
+                                    {% endfor %}
                                 </div>
-                                <a class="review-link" href="#review-form">10 Review(s) | Add your review</a>
+                                <a class="review-link" href="#reviews">({{ total_ratings }} Reviews)</a>
                             </div>
 
-                            <!-- Product Price -->
-                            <div>
-                                <h3 class="product-price">
-                                    {% if best_offer %}
-                                        <p><strong>🎉 Special Offer: {{ best_offer.discount_value }}% OFF!</strong></p>
-                                        <p>
-                                            <del class="product-old-price">₹{{ selected_variant.price }}</del>
-                                            <strong>₹{{ discounted_price|floatformat:2 }}</strong>
-                                        </p>
+                            <!-- Price and Stock -->
+                            <div class="price-section">
+                                {% if best_offer %}
+                                    <p class="special-offer">🎉 Special Offer: {{ best_offer.discount_value }}% OFF!</p>
+                                    <h3 class="product-price">
+                                        <del class="old-price">₹{{ selected_variant.price }}</del>
+                                        <span class="discounted-price">₹{{ discounted_price|floatformat:2 }}</span>
+                                    </h3>
+                                {% else %}
+                                    <h3 class="product-price">₹{{ selected_variant.price }}</h3>
+                                {% endif %}
+                                <p class="stock-status">
+                                    {% if selected_variant.stock_quantity > 0 %}
+                                        In Stock ({{ selected_variant.stock_quantity }} available)
                                     {% else %}
-                                        ₹{{ selected_variant.price }}
+                                        <span class="out-of-stock">Out of Stock</span>
                                     {% endif %}
-                                </h3>
-                                <br>
-                                <span class="product-available">
-                                    {% if selected_variant.stock_quantity > 0 %} In Stock - {{ selected_variant.stock_quantity}} {% else %} Out of Stock {% endif %}
-                                </span>
+                                </p>
                             </div>
 
                             <!-- Product Description -->
-                            <p>{{ product.description }}</p>
+                            <div class="product-description">
+                                <p>{{ product.description }}</p>
+                            </div>
 
                             <!-- Product Variants -->
                             <div class="product-options">
-                                <label>
-                                    Size
-                                    <select class="input-select" name="size" onchange="updateVariant()">
-                                        {% for variant in variants %}
-                                            <option value="{{ variant.id }}" {% if variant.id == selected_variant.id %}selected{% endif %}>
-                                                {{ variant.size.size_name }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </label>
-                                <label>
+                                <!-- Product Details Template -->
+                                <form method="post" action="{% url 'add_to_cart' selected_variant.id %}" id="add-to-cart-form">
+                                    {% csrf_token %}
+                                    <label>
+                                        Size
+                                        <select class="input-select" name="size" id="size-select" onchange="updateVariant()">
+                                            <option value="">Select Size</option>
+                                            {% for size in unique_sizes %}
+                                                <option value="{{ size.id }}" 
+                                                    {% if size.id == selected_variant.size.id %}selected{% endif %}>
+                                                    {{ size.size_name }} ({{ size.variant_count }})
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </label>
+                                    <input type="hidden" name="variant_id" id="variant-id" value="{{ selected_variant.id }}">
+                                </form>
+                                
+                                <!-- <label>
                                     Color
-                                    <select class="input-select" name="color" onchange="updateVariant()">
-                                        {% for variant in variants %}
-                                            <option value="{{ variant.id }}" {% if variant.id == selected_variant.id %}selected{% endif %}>
-                                                {{ variant.color.color_name }}
+                                    <select class="input-select" name="color" id="color-select" onchange="updateVariant()">
+                                        <option value="">Select Color</option>
+                                        {% for color in unique_colors %}
+                                            <option value="{{ color.id }}" 
+                                                {% if color == selected_variant.color %}selected{% endif %}>
+                                                {{ color.color_name }} ({{ color.variant_count }})
                                             </option>
                                         {% endfor %}
                                     </select>
-                                </label>
+                                </label> -->
                             </div>
 
                          <!-- Add to Cart -->
                             <div class="add-to-cart">
-                                <div class="qty-label">
-                                    Qty
-                                    <div class="input-number">
-                                        <input type="number" id="qty" name="quantity" value="1" min="1">
-                                        <span class="qty-up">+</span>
-                                        <span class="qty-down">-</span>
-                                    </div>
-                                </div>
-                                <!-- Form for adding item to cart -->
                                 <form action="{% url 'add_to_cart' selected_variant.id %}" method="POST">
                                     {% csrf_token %}
+                                    
+                                    <!-- Quantity Input -->
+                                    <div class="qty-label">
+                                        Qty
+                                        <div class="input-number">
+                                            <input type="number" id="qty" name="quantity" value="1" min="1">
+                                            <span class="qty-up">+</span>
+                                            <span class="qty-down">-</span>
+                                        </div>
+                                    </div>
+
                                     <input type="hidden" name="variant_id" value="{{ selected_variant.id }}">
+
                                     <button type="submit" class="add-to-cart-btn">
                                         <i class="fa fa-shopping-cart"></i> Add to Cart
                                     </button>
                                 </form>
                             </div>
+
                             {% if best_offer %}
                                 <p><strong>🎉 Special Offer: {{ best_offer.discount }}% OFF!</strong></p>
                                 <p><del>₹{{ original_price }}</del> <strong>₹{{ discounted_price|floatformat:2 }}</strong></p>
@@ -180,7 +198,7 @@
                             <div class="product-options">
                                 <label>Available Colors:</label>
                                 <div class="color-options" style="display: flex; flex-wrap: nowrap; overflow-x: auto;">
-                                    {% for variant in variants %}
+                                    {% for variant in unique_color_variants %}
                                         <a 
                                             href="{% url 'product_details_variant' product.id variant.id %}" 
                                             class="color-swatch" 
@@ -511,6 +529,17 @@
     font-size: 14px;
     margin-bottom: 10px;
 }
+.input-select {
+    width: 200px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin: 5px 0;
+}
+
+.input-select option[disabled] {
+    color: #999;
+}
 
 </style>
 
@@ -559,8 +588,33 @@
                 messageContainer.innerHTML = '<div class="alert alert-danger">Something went wrong. Please try again later.</div>';
             });
         });
-    });
+    }); 
+    function updateVariant() {
+    const sizeSelect = document.getElementById("size-select");
+    const selectedSizeId = sizeSelect.value;
+    const variantId = getVariantIdForSize(selectedSizeId);
 
-    
+    console.log(`Selected Size ID: ${selectedSizeId}, Variant ID: ${variantId}`);
+
+    // Update the hidden input field
+    const variantInput = document.getElementById("variant-id");
+    if (variantInput) {
+        variantInput.value = variantId;
+        console.log(`Updated hidden input value to: ${variantId}`);
+    }
+
+    // Update the form action URL
+    const addToCartForm = document.querySelector(".add-to-cart form");
+    if (addToCartForm) {
+        addToCartForm.action = `/add-to-cart/${variantId}/`;
+        console.log(`Updated form action to: ${addToCartForm.action}`);
+    }
+}
+
+function getVariantIdForSize(sizeId) {
+    const variantMapping = JSON.parse('{{ variant_map|safe }}');
+    console.log("Variant Mapping:", variantMapping);  // Debug output
+    return variantMapping[sizeId] || "";
+}
 
 </script>
