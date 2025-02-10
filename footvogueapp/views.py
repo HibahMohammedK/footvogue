@@ -86,7 +86,6 @@ def search_results(request):
     product_data = [{'name': product.name, 'price': product.price} for product in products]
 
     return JsonResponse({'results': product_data})
-
 @never_cache
 def register_view(request):
     if request.method == "POST":
@@ -94,6 +93,7 @@ def register_view(request):
         email = request.POST.get("email").strip()
         password = request.POST.get("password").strip()
         confirm_password = request.POST.get("confirm_password").strip()
+        referral_code = request.POST.get("referral_code", "").strip()  # Get referral code (if provided)
 
         if password != confirm_password:
             messages.error(request, "Passwords do not match.")
@@ -123,6 +123,14 @@ def register_view(request):
             is_verified=False
         )
         user.save()
+
+        # ✅ Handle Referral System
+        if referral_code:
+            try:
+                referrer = CustomUser.objects.get(referral_code=referral_code)
+                Referral.objects.create(referrer=referrer, referred_user=user)
+            except CustomUser.DoesNotExist:
+                messages.warning(request, "Invalid referral code.")  # Optional: Inform the user
 
         # Generate and send the OTP
         generate_and_send_otp(user)
@@ -1284,7 +1292,7 @@ def get_offers(request):
         offer_data = {
             "id": offer.id,
             "type": offer.offer_type,
-            "discount": offer.discount,
+            "discount": offer.discount_value, 
             "valid": offer.is_active,
             "product": offer.product.name if offer.product else None,
             "category": offer.category.category_name if offer.category else None,
@@ -1316,25 +1324,25 @@ def get_referral_offers(request):
 
     return JsonResponse(referral_list, safe=False)
 
-@require_http_methods(["DELETE"])
+@require_http_methods(["DELETE"])  # Allow only DELETE requests
 def delete_offer(request, offer_id):
     """
-    API endpoint to delete an offer (both regular and referral offers).
+    API endpoint to delete an offer.
     """
     try:
         offer = get_object_or_404(Offer, id=offer_id)
         offer.delete()
-        return JsonResponse({"message": "Offer deleted successfully!"})
+        return JsonResponse({"message": "Offer deleted successfully!"}, status=200)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
-    
+
+
 @require_http_methods(["GET", "POST"])
 def create_offer(request):
     if request.method == "GET":
         products = Product.objects.all()
         categories = Category.objects.all().exclude(is_deleted=True)
-        users = CustomUser.objects.all()
-        return render(request, "admin/orders/create_offer.html", {"products": products, "categories": categories, "users": users})
+        return render(request, "admin/orders/create_offer.html", {"products": products, "categories": categories})
 
     elif request.method == "POST":
         try:
@@ -1344,29 +1352,24 @@ def create_offer(request):
             offer_type = data.get("offer_type")
             discount = float(data.get("discount") or 0)
             min_purchase = float(data.get("min_purchase") or 0)
+            reward_amount = float(data.get("reward_amount") or 0)  # For referral offer
 
             # ✅ Fix: Use default dates if missing
             start_date_str = data.get("start_date")
             end_date_str = data.get("end_date")
 
-            if start_date_str:
-                start_date = timezone.datetime.fromisoformat(start_date_str)
-            else:
-                start_date = timezone.now()  # Use current time if missing ✅
-
-            if end_date_str:
-                end_date = timezone.datetime.fromisoformat(end_date_str)
-            else:
-                end_date = start_date + timezone.timedelta(days=30)  # Default to 30 days later ✅
+            start_date = timezone.datetime.fromisoformat(start_date_str) if start_date_str else timezone.now()
+            end_date = timezone.datetime.fromisoformat(end_date_str) if end_date_str else start_date + timezone.timedelta(days=30)
 
             is_active = data.get("is_active", "true").lower() == "true"
 
             product = get_object_or_404(Product, id=data["product_id"]) if data.get("product_id") else None
             category = get_object_or_404(Category, id=data["category_id"]) if data.get("category_id") else None
 
+            # ✅ Create the offer
             offer = Offer.objects.create(
                 offer_type=offer_type,
-                discount=discount,
+                discount_value=discount,
                 product=product,
                 category=category,
                 min_purchase=min_purchase,
@@ -1375,27 +1378,18 @@ def create_offer(request):
                 is_active=is_active,
             )
 
+            # ✅ If it's a referral offer, just store the reward amount
             if offer_type == "referral":
-                referrer = get_object_or_404(CustomUser, id=data.get("referrer_id"))
-                referred_user = get_object_or_404(CustomUser, id=data.get("referred_user_id"))
-                
-                reward_amount = float(data.get("reward_amount") or 0)
-
-                referral_offer = ReferralOffer.objects.create(
+                ReferralOffer.objects.create(
                     offer=offer,
-                    referrer=referrer,
-                    referred_user=referred_user,
                     reward_amount=reward_amount,
                 )
-                
-                referrer_wallet, _ = Wallet.objects.get_or_create(user=referrer)
-                referrer_wallet.credit(reward_amount, reason="Referral Reward")
+                print(f"✅ Referral Offer Created | Reward Amount: {reward_amount}")
 
             return JsonResponse({"message": "Offer created successfully!", "id": offer.id})
 
         except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
-
+            return JsonResponse({"error": str(e)}, status=400)      
 
 @require_http_methods(["POST"])
 def toggle_offer_status(request, offer_id):
@@ -1748,15 +1742,16 @@ def remove_from_wishlist(request):
 
 @login_required
 def wallet_view(request):
-    # Get the wallet of the logged-in user
-    try:
-        wallet = request.user.wallet
-    except Wallet.DoesNotExist:
-        wallet = None
+    # Get or create the wallet of the logged-in user
+    wallet, created = Wallet.objects.get_or_create(user=request.user)
 
-    # Render the wallet page with the wallet balance
+    # Fetch transactions related to the wallet (ordered by latest first)
+    transactions = Transaction.objects.filter(wallet=wallet).order_by("-created_at")
+
+    # Render the wallet page with balance and transactions
     return render(request, "user/wallet.html", {
         "wallet": wallet,
+        "transactions": transactions,
     })
 
 #----------  RETURN MANAGEMENT -------------------------
