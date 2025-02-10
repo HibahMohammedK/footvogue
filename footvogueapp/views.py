@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout
 from django.views.decorators.cache import never_cache
 import logging
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required , user_passes_test
 from .forms import ReviewForm, RatingForm
 from django.core.paginator import Paginator
 from django.db.models import Avg, Sum, Count
@@ -27,6 +27,7 @@ from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from reportlab.pdfgen import canvas
 import razorpay
+from django.views.decorators.csrf import csrf_exempt
 
    
 
@@ -36,6 +37,8 @@ def home(request):
     products = Product.objects.prefetch_related(
         'productvariant_set__productimage_set'
     ).filter(is_deleted=False)  # Adjust filters based on your requirements
+
+    categories = Category.objects.all()
 
     # Create a rating range (1 to 5) for use in the template
     rating_range = range(1, 6)
@@ -60,6 +63,7 @@ def home(request):
     
     context = {
         'products': products, 
+        'categories': categories,
         'rating_range': rating_range,
         'cart_items': cart_items,
         'total_price': total_price,
@@ -67,6 +71,21 @@ def home(request):
 
     # Render the home template with products and rating range
     return render(request, 'user/home.html', context)
+
+def search_results(request):
+    category_id = request.GET.get('category', '0')
+    query = request.GET.get('query', '')
+
+    # Filter products based on the search query and category
+    if category_id == '0':
+        products = Product.objects.filter(name__icontains=query)
+    else:
+        products = Product.objects.filter(category_id=category_id, name__icontains=query)
+
+    # Prepare the results for the front-end
+    product_data = [{'name': product.name, 'price': product.price} for product in products]
+
+    return JsonResponse({'results': product_data})
 
 @never_cache
 def register_view(request):
@@ -288,21 +307,28 @@ def category_list(request):
     categories = Category.objects.filter(is_deleted=False)
     return render(request, 'admin/categories/category_list.html', {'categories': categories})
 
+from django.db.models import Q
+
 def add_category(request):
     if request.method == 'POST':
-        category_name = request.POST.get('category_name')  # Get the category name
+        category_name = request.POST.get('category_name').strip()  # Remove extra spaces
         parent_category_id = request.POST.get('parent_category')  # Get the parent category ID
-        
-        # Check if a category with the same name already exists and is soft-deleted
-        existing_category = Category.objects.filter(category_name=category_name, is_deleted=True).first()
-        
+
+        # Check if a category with the same name already exists (case-insensitive)
+        existing_category = Category.objects.filter(Q(category_name__iexact=category_name)).first()
+
         if existing_category:
-            # If the category exists but is soft-deleted, restore it
-            existing_category.is_deleted = False
-            existing_category.save()
-            messages.success(request, f"Category '{category_name}' restored successfully!")
+            if existing_category.is_deleted:
+                # If the category exists but is soft-deleted, restore it
+                existing_category.is_deleted = False
+                existing_category.save()
+                messages.success(request, f"Category '{category_name}' restored successfully!")
+            else:
+                # If the category already exists and is not deleted, prevent duplicate entry
+                messages.error(request, f"Category '{category_name}' already exists!")
+                return render(request, 'admin/categories/add_category.html', {'form': CategoryForm()})
         else:
-            # If no such soft-deleted category exists, create a new one
+            # If no such category exists, create a new one
             form = CategoryForm(request.POST)
             if form.is_valid():
                 form.save()
@@ -316,6 +342,7 @@ def add_category(request):
     else:
         form = CategoryForm()
     return render(request, 'admin/categories/add_category.html', {'form': form})
+
 
 
 
@@ -351,60 +378,58 @@ def view_products(request):
     ).filter(is_deleted=False)
 
     return render(request, 'admin/products/view_products.html', {'products': products})
-def add_product(request):
-    if request.method == "POST":
-        name = request.POST.get("name")
-        category_id = request.POST.get("category")
-        description = request.POST.get("description")
 
-        # Validate and save the product
-        category = Category.objects.get(id=category_id)
+
+def add_product(request):
+    if request.method == 'POST':
+        # Create Product
         product = Product.objects.create(
-            name=name,
-            category=category,
-            description=description
+            name=request.POST['name'],
+            description=request.POST['description'],
+            category_id=request.POST['category']
         )
 
-        # Handle product variants
-        for key in request.POST:
-            if key.startswith("variant_") and key.endswith("_price"):
-                # Extract variant index
-                index = key.split("_")[1]
+        # Process Colors
+        colors = {}
+        i = 0
+        while f'color_{i}_name' in request.POST:
+            color = ProductColor.objects.create(
+                color_name=request.POST[f'color_{i}_name'],
+            )
+            # Save images for this color
+            images = request.FILES.getlist(f'color_{i}_images')
+            colors[i] = (color, images)
+            i += 1
 
-                # Gather data for this variant
-                price = request.POST.get(f"variant_{index}_price")
-                stock = request.POST.get(f"variant_{index}_stock")
-                colors = request.POST.getlist(f"variant_{index}_colors[]")
-                color_codes = request.POST.getlist(f"variant_{index}_color_code[]")
-                sizes = request.POST.getlist(f"variant_{index}_sizes[]")
-                images = request.FILES.getlist(f"variant_{index}_images[]")
+        # Process Sizes
+        sizes = {}
+        j = 0
+        while f'size_{j}' in request.POST:
+            size, _ = ProductSize.objects.get_or_create(
+                size_name=request.POST[f'size_{j}']
+            )
+            sizes[j] = size
+            j += 1
 
-                # Create the variant for each color and size combination
-                for color_name, color_code in zip(colors, color_codes):
-                    # Get or create the color
-                    color, created = ProductColor.objects.get_or_create(
-                        color_name=color_name
+        # Process Variants
+        for color_idx, (color, images) in colors.items():
+            for size_idx, size in sizes.items():
+                if f'variant_{color_idx}_{size_idx}_price' in request.POST:
+                    # Create Variant
+                    variant = ProductVariant.objects.create(
+                        product=product,
+                        color=color,
+                        size=size,
+                        price=request.POST[f'variant_{color_idx}_{size_idx}_price'],
+                        stock_quantity=request.POST[f'variant_{color_idx}_{size_idx}_stock']
                     )
-
-                    for size_name in sizes:
-                        # Get or create the size
-                        size, created = ProductSize.objects.get_or_create(size_name=size_name)
-
-                        # Save the variant with color and size
-                        variant = ProductVariant.objects.create(
-                            product=product,
-                            price=price,
-                            stock_quantity=stock,
-                            color=color,
-                            size=size  # Ensure the size is assigned
+                    
+                    # Save Images for this variant
+                    for image in images:
+                        ProductImage.objects.create(
+                            variant=variant,
+                            image_url=image
                         )
-
-                        # Save images for the variant
-                        for image in images:
-                            ProductImage.objects.create(
-                                variant=variant,
-                                image_url=image
-                            )
 
         messages.success(request, "Product and variants added successfully!")
         return redirect("add_product")
@@ -622,108 +647,98 @@ def products(request):
 
 def product_details(request, product_id, variant_id=None):
     product = get_object_or_404(Product, id=product_id, is_deleted=False)
-
-    # Get the category hierarchy
+    variants = product.productvariant_set.select_related('size', 'color').all()
+    selected_variant = get_object_or_404(variants, id=variant_id) if variant_id else variants.first()
+    
+    # Fetch category hierarchy
     categories = []
     current_category = product.category
     while current_category:
         categories.insert(0, current_category)
         current_category = current_category.parent_category
-
-    # Get all variants and select the default
-    variants = product.productvariant_set.all()
-    selected_variant = get_object_or_404(variants, id=variant_id) if variant_id else variants.first()
-
+    
     # Fetch active offers
     now = timezone.now()
-    product_offer = Offer.objects.filter(
-        offer_type='product', product=product, is_active=True,
-        start_date__lte=now, end_date__gte=now
-    ).first()
-
-    category_offers = Offer.objects.filter(
-        offer_type='category', category__in=categories, is_active=True,
-        start_date__lte=now, end_date__gte=now
-    ).select_related('category')
-
-    category_offer = category_offers.order_by('-discount_value').first() if category_offers.exists() else None
-
+    product_offer = Offer.objects.filter(offer_type='product', product=product, is_active=True,
+                                         start_date__lte=now, end_date__gte=now).first()
+    category_offers = Offer.objects.filter(offer_type='category', category__in=categories, is_active=True,
+                                           start_date__lte=now, end_date__gte=now).order_by('-discount_value')
+    category_offer = category_offers.first()
+    
     # Determine the best discount
-    best_offer = None
-    discount_value = 0
-    if product_offer and category_offer:
-        best_offer = product_offer if product_offer.discount_value > category_offer.discount_value else category_offer
-    elif product_offer:
-        best_offer = product_offer
-    elif category_offer:
-        best_offer = category_offer
-
-    if best_offer:
-        if best_offer.discount_type == 'percentage':  # Assuming discount_type is 'percentage' or 'fixed'
-            discount_value = selected_variant.price * (best_offer.discount_value / 100)
-        else:  # Fixed amount discount
-            discount_value = best_offer.discount_value
-
-    # Ensure discount does not make price negative
+    best_offer = max(filter(None, [product_offer, category_offer]), key=lambda o: o.discount_value, default=None)
+    discount_value = (selected_variant.price * (best_offer.discount_value / 100) if best_offer and best_offer.discount_type == 'percentage' 
+                      else best_offer.discount_value if best_offer else 0)
     discounted_price = max(selected_variant.price - discount_value, 0)
-
-    # Add to cart logic
+    
+    # Handle add-to-cart functionality
     if request.method == 'POST':
-        variant_id = request.POST.get('variant_id')
+        variant = get_object_or_404(ProductVariant, id=request.POST.get('variant_id'))
         quantity = int(request.POST.get('quantity', 1))
-        variant = get_object_or_404(ProductVariant, id=variant_id)
         cart_item, created = Cart.objects.get_or_create(user=request.user, product_variant=variant)
-        if cart_item:
-            cart_item.quantity += quantity
-            cart_item.price = discounted_price
-            cart_item.save()
+        cart_item.quantity += quantity
+        cart_item.price = discounted_price
+        cart_item.save()
         return redirect('cart')
-
+    
     # Product rating calculations
     ratings = Rating.objects.filter(product=product)
-    total_ratings = ratings.count()
-    avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
-    rounded_avg_rating = round(avg_rating) if avg_rating else 0
-    filled_stars_range = range(rounded_avg_rating)
-    empty_stars_range = range(5 - rounded_avg_rating)
-
+    avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] or 0
+    rounded_avg_rating = round(avg_rating)
+    
     # Pagination for reviews
-    reviews = Review.objects.filter(product=product)
-    paginator = Paginator(reviews.order_by('-created_at'), 5)
-    page_number = request.GET.get('page')
-    reviews_page = paginator.get_page(page_number)
-
-    for review in reviews_page:
-        review.rating_value = Rating.objects.filter(user=review.user, product=product).first().rating \
-            if Rating.objects.filter(user=review.user, product=product).exists() else 0
-
-    # Related products
+    reviews_page = Paginator(Review.objects.filter(product=product).order_by('-created_at'), 5).get_page(request.GET.get('page'))
+    
+    # Related products with ratings
     related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]
-    for related_product in related_products:
-        ratings = Rating.objects.filter(product=related_product)
-        total_ratings = ratings.count()
-        related_product.avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] if total_ratings else 0
+    for related in related_products:
+        related.avg_rating = Rating.objects.filter(product=related).aggregate(Avg('rating'))['rating__avg'] or 0
+    
+    # Fetch unique sizes and colors
+    unique_sizes = ProductSize.objects.filter(productvariant__product=product).distinct().annotate(variant_count=Count('productvariant'))
+    unique_color_variants = {variant.color.id: variant for variant in variants}.values()
+    
+        # Get unique sizes available for the product
+    unique_sizes = ProductSize.objects.filter(
+        productvariant__product=product,
+        productvariant__color=selected_variant.color  # Filter by selected color
+        ).distinct().annotate(variant_count=Count('productvariant'))
+    
 
+    color_filtered_variants = variants.filter(color=selected_variant.color)
+
+    # Create size-to-variant mapping for selected color
+    variant_map = {
+        str(variant.size.id): variant.id 
+        for variant in color_filtered_variants
+    }
+
+    print(f"Variant Map: {variant_map}")  # Debug output
+
+
+
+    product_images = ProductImage.objects.filter(variant=selected_variant).distinct()
 
     context = {
         'product': product,
+        'product_images': product_images,
         'selected_variant': selected_variant,
         'variants': variants,
         'categories': categories,
         'avg_rating': avg_rating,
-        'filled_stars_range': filled_stars_range,
-        'empty_stars_range': empty_stars_range,
-        'rating_breakdown': [{'rating': i, 'percentage': 20} for i in range(1, 6)],
+        'filled_stars_range': range(rounded_avg_rating),
+        'empty_stars_range': range(5 - rounded_avg_rating),
         'reviews': reviews_page,
         'related_products': related_products,
         'best_offer': best_offer,
-        'product_offer': product_offer,
-        'category_offer': category_offer,
         'discounted_price': discounted_price,
         'original_price': selected_variant.price,
-
+        'unique_sizes': unique_sizes,
+        'unique_color_variants': unique_color_variants,
+       'variant_map': json.dumps(variant_map),
     }
     return render(request, 'user/product_details.html', context)
+
 
 
 @login_required(login_url='login')
@@ -788,7 +803,6 @@ def submit_review_and_rating(request, product_id):
     
 
 
-
 @never_cache
 @login_required
 def profile(request):
@@ -799,44 +813,36 @@ def profile(request):
         .prefetch_related('items__product_variant__product', 'items__product_variant__productimage_set')  
         .order_by('-order_date')
     )
-    active_tab = request.GET.get('active_tab', 'details')  
 
-    # Handle order cancellation
-    if request.method == "POST" and 'cancel_order' in request.POST:
-        order_id = request.POST.get('order_id')
-        order = get_object_or_404(Order, id=order_id, user=user)
+    print("DEBUG: Orders Retrieved ->", orders)  # ✅ Debugging
 
-        # Allow cancellation only for orders not yet delivered or already cancelled
-        if order.status not in ['Delivered', 'Cancelled', 'Completed']:
-            order.status = 'Cancelled'
-            order.save()
-            success(request, f"Order #{order.id} has been successfully cancelled.")
-        else:
-            error(request, f"Order #{order.id} cannot be cancelled.")
-        return redirect('profile')
-
-    # Prepare detailed order data
     order_details = []
     for order in orders:
+        print(f"DEBUG: Processing Order #{order.id} | Status -> {order.status}")  # ✅ Debugging
+
         items = []
-        for item in order.items.all():  # Use the correct related_name "items"
+        for item in order.items.all():
+            print(f"DEBUG: OrderItem #{item.id} | Quantity -> {item.quantity} | Price -> {item.price}")  # ✅ Debugging
+            
+           
             # Fetch the first image for the product variant
             image = item.product_variant.productimage_set.first()
             items.append({
-                'product_name': item.product_variant.product.name,  # Access product name via product_variant
-                'product_image': image.image_url.url if image else None,  # Access image if available
-                'color': item.product_variant.color.color_name,  # Access color name
-                'size': item.product_variant.size.size_name,  # Access size name
+                'product_name': item.product_variant.product.name,
+                'product_image': image.image_url.url if image else None,
+                'color': item.product_variant.color.color_name,
+                'size': item.product_variant.size.size_name,
                 'quantity': item.quantity,
                 'price': item.price,
                 'total_price': item.price * item.quantity,
             })
+
         order_details.append({
             'id': order.id,
             'status': order.status,
             'date': order.order_date,
             'total_amount': order.total_amount,
-            'delivery_status': order.status,  # Use status for delivery
+            'delivery_status': order.status,
             'items': items,
         })
 
@@ -844,7 +850,6 @@ def profile(request):
         'user': user,
         'addresses': addresses,
         'orders': order_details,
-        'active_tab': active_tab,
     })
 
 
@@ -939,24 +944,29 @@ def change_password(request):
         form = PasswordChangeForm(request.user)
     return render(request, 'user/change_password.html', {'form': form})
 
-#cart
 def add_to_cart(request, variant_id):
+    if not request.user.is_authenticated:
+        messages.warning(request, "You need to log in to add items to your cart.")
+        return redirect('/login/')
+
     variant = get_object_or_404(ProductVariant, id=variant_id)
+    print(f"Adding variant to cart: {variant_id}, Size: {variant.size.size_name}")  # Debug output
 
     # Get or create the user's cart item for this product variant
     cart_item, created = Cart.objects.get_or_create(user=request.user, product_variant=variant)
 
     if request.method == 'POST':
-        quantity = int(request.POST.get('quantity', 1))  # Default to 1 if no quantity is provided
+        quantity = int(request.POST.get('quantity', 1))
         
-        if quantity <= variant.stock_quantity:  # Ensure we do not exceed stock
-            cart_item.quantity = quantity
-            cart_item.save()
-            return redirect('cart_view')  # Redirect to cart view
-        else:
-            return HttpResponse("Not enough stock.", status=400)
+        if quantity > variant.stock_quantity:
+            return HttpResponse("Not enough stock available.", status=400)
 
-    return redirect('cart_view')  # Redirect if not a POST request
+        cart_item.quantity = quantity
+        cart_item.save()
+        messages.success(request, "Item added to your cart successfully.")
+        return redirect('cart_view')
+
+    return redirect('cart_view')
 
 def cart_view(request):
     cart_items = Cart.get_user_cart(request.user)
@@ -965,7 +975,9 @@ def cart_view(request):
     for item in cart_items:
         variant = item.product_variant
         image = ProductImage.objects.filter(variant=variant).first()
-        discounted_price = variant.get_discounted_price()  
+        discounted_price = variant.get_discounted_price() 
+
+        print(f"Cart Item: {item.id}, Variant ID: {item.product_variant.id}, Size: {item.product_variant.size.size_name}")
         
         cart_data.append({
             'id': item.id,
@@ -1000,27 +1012,26 @@ def remove_from_cart(request, cart_item_id):
     messages.success(request, "Item removed from the cart.")
     return redirect('cart_view')
 
+
 @login_required
 def checkout(request):
     user = request.user
     cart_items = Cart.get_user_cart(user)
     total_price = sum(item.get_discounted_total() for item in cart_items)
-    total_price_paise = int(total_price * 100) 
-
+    total_price_paise = int(total_price * 100)  # Convert to paise
 
     # Razorpay setup
     client = razorpay.Client(auth=(settings.RAZORPAY_API_KEY, settings.RAZORPAY_API_SECRET))
     razorpay_order = client.order.create({
-        'amount': int(total_price * 100),  # Amount in paise
+        'amount': total_price_paise,  
         'currency': 'INR',
         'payment_capture': '1',
     })
-    razorpay_order_id = razorpay_order['id']  # Only pass order_id, no need for signature here
+    razorpay_order_id = razorpay_order['id']  
 
-    cart_data = []
-    for item in cart_items:
-        image = ProductImage.objects.filter(variant=item.product_variant).first()
-        cart_data.append({
+    # Cart data for display
+    cart_data = [
+        {
             'id': item.id,
             'product_name': item.product_variant.product.name,
             'color': item.product_variant.color.color_name,
@@ -1028,14 +1039,17 @@ def checkout(request):
             'price': item.product_variant.get_discounted_price(),
             'quantity': item.quantity,
             'total_price': item.get_discounted_total(),
-            'image_url': image.image_url.url if image else None,
-        })
+            'image_url': ProductImage.objects.filter(variant=item.product_variant).first().image_url.url if ProductImage.objects.filter(variant=item.product_variant).exists() else None,
+        }
+        for item in cart_items
+    ]
 
     discount = 0
     applied_coupon_code = None
     shipping_address = None
 
     if request.method == "POST":
+        # Handling Coupon Code
         if 'coupon_code' in request.POST:
             coupon_code = request.POST.get("coupon_code")
             try:
@@ -1055,19 +1069,38 @@ def checkout(request):
             except Coupon.DoesNotExist:
                 messages.error(request, "Invalid coupon code")
 
+        # Handling Address Selection
         address_select = request.POST.get("address_select")
         if address_select:
             try:
-                shipping_address = Address.objects.get(id=address_select, user=user)
+                shipping_address = get_object_or_404(Address, id=address_select, user=user)
                 request.session["shipping_address_id"] = shipping_address.id
                 messages.success(request, "Shipping address selected successfully.")
             except Address.DoesNotExist:
                 messages.error(request, "Invalid address selected.")
         else:
-            new_address = Address.create_from_request(request)
-            request.session["shipping_address_id"] = new_address.id
-            messages.success(request, "New address added and selected successfully.")
+            # Use AddressForm to create a new address
+            address_form = AddressForm(request.POST)
+            if address_form.is_valid():
+                new_address = address_form.save(commit=False)
+                new_address.user = user
+                new_address.save()
+                request.session["shipping_address_id"] = new_address.id
+                messages.success(request, "New address added and selected successfully.")
+            else:
+                messages.error(request, "Please correct the errors in the address form.")
+                return render(request, "user/checkout.html", {
+                    "cart_items": cart_data,
+                    "total_price": total_price,
+                    "discount": discount,
+                    "total_price_paise": total_price_paise,
+                    "applied_coupon": applied_coupon_code,
+                    "shipping_address": shipping_address,
+                    "razorpay_order_id": razorpay_order_id,
+                    "address_form": address_form,  # Pass form to template
+                })
 
+    # Retrieve the selected shipping address
     selected_address_id = request.session.get("shipping_address_id")
     if selected_address_id:
         shipping_address = Address.objects.get(id=selected_address_id, user=user)
@@ -1079,10 +1112,10 @@ def checkout(request):
         "total_price_paise": total_price_paise,
         "applied_coupon": applied_coupon_code,
         "shipping_address": shipping_address,
-        'razorpay_order_id': razorpay_order_id,  # Only pass razorpay_order_id
+        "razorpay_order_id": razorpay_order_id,
+        "address_form": AddressForm(),  # Provide an empty form for new addresses
     })
-
-
+    
 @login_required
 @transaction.atomic
 def place_order(request):
@@ -1100,101 +1133,73 @@ def place_order(request):
 
     if request.method == "POST":
         payment_method = request.POST.get("payment_method", "cod")
-        shipping_address = get_object_or_404(Address, id=request.session.get("shipping_address_id"))
+        shipping_address_id = request.session.get("shipping_address_id")
 
-        # If payment is done via Razorpay
+        if not shipping_address_id:
+            messages.error(request, "Please select a shipping address.")
+            return redirect("checkout")
+
+        shipping_address = get_object_or_404(Address, id=shipping_address_id, user=user)
+
+        # Handle different payment methods
         if payment_method == "razorpay":
-            # Ensure these are not None
-            razorpay_payment_id = request.POST.get('razorpay_payment_id')
-            razorpay_order_id = request.POST.get('razorpay_order_id')
-            razorpay_signature = request.POST.get('razorpay_signature')
-            
+            # Razorpay-specific validation
+            razorpay_payment_id = request.POST.get("razorpay_payment_id")
+            razorpay_order_id = request.POST.get("razorpay_order_id")
+            razorpay_signature = request.POST.get("razorpay_signature")
+
             if not all([razorpay_payment_id, razorpay_order_id, razorpay_signature]):
-                messages.error(request, "Payment details missing")
+                messages.error(request, "Payment details missing. Please complete the payment.")
                 return redirect("checkout")
+
             # Verify payment signature
             client = razorpay.Client(auth=(settings.RAZORPAY_API_KEY, settings.RAZORPAY_API_SECRET))
-
-            params_dict = {
-                'razorpay_order_id': razorpay_order_id,
-                'razorpay_payment_id': razorpay_payment_id,
-                'razorpay_signature': razorpay_signature,
-            }
             try:
-                client.utility.verify_payment_signature(params_dict)
+                client.utility.verify_payment_signature({
+                    'razorpay_order_id': razorpay_order_id,
+                    'razorpay_payment_id': razorpay_payment_id,
+                    'razorpay_signature': razorpay_signature
+                })
                 payment_status = 'Paid'
             except razorpay.errors.SignatureVerificationError:
-                payment_status = 'Failed'
-
-            if payment_status == 'Paid':
-                # Create the order if payment is successful
-                order = Order.objects.create(
-                    user=user,
-                    shipping_address=shipping_address,
-                    subtotal=subtotal,
-                    discount=total_discount,
-                    total_amount=final_price,
-                    applied_coupon=applied_coupon,
-                    status="Processing",
-                    payment_status='Paid',
-                )
-
-                for cart_item in cart_items:
-                    variant = cart_item.product_variant
-                    discounted_price = cart_item.product_variant.get_discounted_price()
-
-                    OrderItem.objects.create(
-                        order=order,
-                        product_variant=variant,
-                        quantity=cart_item.quantity,
-                        price=discounted_price,
-                    )
-
-                    variant.stock_quantity -= cart_item.quantity
-                    variant.save()
-
-                # Clear cart and session details
-                cart_items.delete()
-                for key in ["applied_coupon", "discount"]:
-                    request.session.pop(key, None)
-
-                messages.success(request, "Order placed successfully!")
-                return redirect("order_summary", order_id=order.id)  # Ensure this redirect is correct
-            else:
-                messages.error(request, "Payment failed. Please try again.")
+                messages.error(request, "Payment verification failed. Please try again.")
                 return redirect("checkout")
+        else:
+            # COD handling
+            payment_status = 'Pending'
 
-        else:  # COD or other payment methods
-            order = Order.objects.create(
-                user=user,
-                shipping_address=shipping_address,
-                subtotal=subtotal,
-                discount=total_discount,
-                total_amount=final_price,
-                applied_coupon=applied_coupon,
-                status="Pending",
+        # Create order (common for both payment methods)
+        order = Order.objects.create(
+            user=user,
+            shipping_address=shipping_address,
+            subtotal=subtotal,
+            discount=total_discount,
+            total_amount=final_price,
+            applied_coupon=applied_coupon,
+            status="Processing" if payment_status == "Paid" else "Pending",
+            payment_status=payment_status,
+            payment_method=payment_method,
+        )
+
+        # Create order items
+        for cart_item in cart_items:
+            variant = cart_item.product_variant
+            OrderItem.objects.create(
+                order=order,
+                product_variant=variant,
+                quantity=cart_item.quantity,
+                price=variant.get_discounted_price(),
             )
+            variant.stock_quantity -= cart_item.quantity
+            variant.save()
 
-            for cart_item in cart_items:
-                variant = cart_item.product_variant
-                discounted_price = cart_item.product_variant.get_discounted_price()
+        # Clear cart and session
+        cart_items.delete()
+        for key in ["applied_coupon", "discount", "shipping_address_id"]:
+            request.session.pop(key, None)
 
-                OrderItem.objects.create(
-                    order=order,
-                    product_variant=variant,
-                    quantity=cart_item.quantity,
-                    price=discounted_price,
-                )
-
-                variant.stock_quantity -= cart_item.quantity
-                variant.save()
-
-            cart_items.delete()
-            for key in ["applied_coupon", "discount"]:
-                request.session.pop(key, None)
-
-            messages.success(request, "Order placed successfully!")
-            return redirect("order_summary", order_id=order.id)  # Ensure this redirect is correct
+        messages.success(request, "Order placed successfully!")
+        return redirect("order_summary", order_id=order.id)
 
     return render(request, "user/place_order.html", {
         "cart_items": cart_items,
@@ -1202,8 +1207,6 @@ def place_order(request):
         "total_discount": total_discount,
         "final_price": final_price,
     })
-
-
 
 @login_required
 def order_summary(request, order_id):
@@ -1755,3 +1758,81 @@ def wallet_view(request):
     return render(request, "user/wallet.html", {
         "wallet": wallet,
     })
+
+#----------  RETURN MANAGEMENT -------------------------
+
+
+# ✅ Helper function to check if user is admin
+def is_admin(user):
+    return user.is_staff
+
+
+@login_required
+def request_return(request, order_item_id):
+    """Allow users to request a return with a predefined reason and optional additional notes."""
+    
+    order_item = get_object_or_404(OrderItem, id=order_item_id, order__user=request.user)
+
+    if request.method == "POST":
+        reason_id = request.POST.get("reason")
+        additional_notes = request.POST.get("additional_notes", "").strip()
+
+        reason = ReturnReason.objects.get(id=reason_id) if reason_id else None
+
+        # Check if a return request already exists for this order item
+        if ReturnRequest.objects.filter(order_item=order_item).exists():
+            messages.error(request, "You have already submitted a return request for this item.")
+            return redirect("user_returns")  
+
+        # Create a new return request
+        ReturnRequest.objects.create(
+            order_item=order_item,
+            user=request.user,
+            reason=reason,
+            additional_notes=additional_notes if additional_notes else None,
+            status="Pending",
+            created_at=now(),
+        )
+
+        messages.success(request, "Return request submitted successfully!")
+        return redirect("user_returns")  
+
+    # Fetch all predefined return reasons
+    reasons = ReturnReason.objects.all()
+    return render(request, "user/request_return.html", {"order_item": order_item, "reasons": reasons})
+
+
+# ✅ User: View their return requests
+@login_required
+def user_return_requests(request):
+    """Display the return requests submitted by the user."""
+    
+    returns = ReturnRequest.objects.filter(user=request.user)
+    return render(request, "user/users_return.html", {"returns": returns})
+
+
+
+# ✅ Admin: View all return requests
+@login_required
+@user_passes_test(is_admin)
+def admin_return_requests(request):
+    returns = ReturnRequest.objects.all()
+    return render(request, "admin/orders/admin_return.html", {"returns": returns})
+
+
+# ✅ Admin: Approve or reject a return request
+@csrf_exempt  # Allows AJAX POST requests
+def update_return_status(request):
+    if request.method == "POST":
+        return_id = request.POST.get("return_id")
+        new_status = request.POST.get("new_status")
+
+        try:
+            return_request = ReturnRequest.objects.get(id=return_id)
+            return_request.status = new_status
+            return_request.save()
+            return JsonResponse({"message": "Return status updated successfully!"}, status=200)
+        except ReturnRequest.DoesNotExist:
+            return JsonResponse({"message": "Return request not found."}, status=404)
+
+    return JsonResponse({"message": "Invalid request"}, status=400)

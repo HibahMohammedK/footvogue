@@ -1,0 +1,49 @@
+{% extends "user/home.html" %}
+{% block content %}
+
+<div class="container d-flex justify-content-center align-items-center vh-100"><br>
+    <div class="col-lg-8 col-md-10 col-sm-12">
+        <div class="card shadow-lg border-0">
+            <div class="card-header bg-warning text-white text-center">
+                <h4 class="mb-0">Your Return Requests</h4>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered text-center">
+                    <thead class="table-warning">
+                        <tr>
+                            <th>Product</th>
+                            <th>Reason</th>
+                            <th>Additional Notes</th>
+                            <th>Status</th>
+                            <th>Requested On</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for return in returns %}
+                        <tr>
+                            <td>{{ return.order_item.product_variant.product.name }}</td>
+                            <td>{{ return.reason.reason_text }}</td>
+                            <td>{{ return.additional_notes|default:"N/A" }}</td>
+                            <td>
+                                <span class="badge 
+                                    {% if return.status == 'Pending' %} bg-warning 
+                                    {% elif return.status == 'Approved' %} bg-success 
+                                    {% else %} bg-danger {% endif %}">
+                                    {{ return.status }}
+                                </span>
+                            </td>
+                            <td>{{ return.created_at|date:"d M Y, h:i A" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">No return requests found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table><br>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

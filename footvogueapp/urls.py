@@ -60,6 +60,14 @@ urlpatterns = [
     path('checkout/', views.checkout, name='checkout'),
     path('place_order/', views.place_order, name='place_order'),
     path('order_summary/<int:order_id>/', views.order_summary, name='order_summary'),
+    
+    
+
+    path("request-return/<int:order_item_id>/", views.request_return, name="request_return"),
+    path("user-returns/", views.user_return_requests, name="user_returns"),
+    path("returns/", views.admin_return_requests, name="admin_returns"),
+     path('update-return-status/', views.update_return_status, name='update_return_status'),
+
 
    # Offer Management URLs
     path('offers/', views.offer_list, name='offer_list'),
@@ -84,6 +92,7 @@ urlpatterns = [
     path('wishlist/add_to_cart/<int:variant_id>/', views.add_to_cart_from_wishlist, name='add_to_cart_from_wishlist'),
 
     path("wallet/", views.wallet_view, name="wallet"),
+    path('search-results/', views.search_results, name='search_results'),
 
 ]
 

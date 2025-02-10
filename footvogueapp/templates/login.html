@@ -1,30 +1,33 @@
 {% extends "user/home.html" %}
-
-{% block content %}
-<div id="login" class="section" style="background-color: #f9f9f9; padding: 60px 0;">
-    <div class="container">
+{% load socialaccount %}
+{% block content %} 
+<div id="login" class="section d-flex justify-content-center align-items-center vh-100" 
+     style="background: url('/static/img/login_back.PNG') no-repeat center center/cover; padding: 220px 0;">
+    <div class="container py-5">
         <div class="row justify-content-center">
-            <div class="col-md-6">
-                <div class="card shadow-lg p-4">
-                    <h2 class="text-center mb-4" style="color: #333;">Login to <strong>Foot Vogue</strong></h2>
+            <div class="col-md-6"> 
+                <div class="card shadow-lg p-5">
+                    <h2 class="text-center mb-4" style="color: #eec9c9;">Login to <strong>Foot Vogue</strong></h2>
 
                     <!-- Login Form -->
                     <form method="post" action="{% url 'login' %}" id="login-form">
                         {% csrf_token %}
                         
                         <!-- Login Identifier Field -->
-                        <div class="form-group mb-3" id="login-identifier-field">
+                        <div class="form-group mb-3">
                             <input class="form-control" type="text" name="login_identifier" placeholder="Enter Your Username or Email" required>
                         </div>
 
                         <!-- Password Field -->
-                        <div class="form-group mb-3" id="password-field">
+                        <div class="form-group mb-3">
                             <input class="form-control" type="password" name="password" placeholder="Enter Your Password" required>
                         </div>
-                        <button type="submit" class="primary-btn order-submit">Login</button>
-                        
-                    </form>
-
+                        <button type="submit" class="primary-btn order-submit w-100">Login</button>
+                    </form><br>
+                    <a href="{% provider_login_url 'google' %}" class="btn btn-google"  style="color: #f1e7e7; background-color: rgba(240, 234, 234, 0.315); border-radius: 6rem;">
+                        <i class="fa fa-google"></i> Login with Google
+                    </a>
+                    
 
                     <!-- Messages -->
                     {% if messages %}
@@ -45,5 +48,4 @@
         </div>
     </div>
 </div>
-
 {% endblock %}

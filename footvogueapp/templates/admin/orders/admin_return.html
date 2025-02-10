@@ -1,0 +1,69 @@
+{% extends "admin/admin_dash.html" %}
+{% block content %}
+
+<div class="card shadow-sm p-3">
+    <h4 class="text-center mb-4">All Return Requests</h4>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered table-hover text-center align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>User</th>
+                    <th>Product</th>
+                    <th>Reason</th>
+                    <th>Additional Notes</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for return in returns %}
+                <tr>
+                    <td>{{ return.user.username }}</td>
+                    <td>{{ return.order_item.product_variant.product.name }}</td>
+                    <td>{{ return.reason.reason_text }}</td>
+                    <td class="text-wrap" style="max-width: 150px;">{{ return.additional_notes|default:"N/A" }}</td>
+                    <td>
+                        <select class="form-select return-status" data-return-id="{{ return.id }}">
+                            <option value="Pending" {% if return.status == "Pending" %}selected{% endif %}>Pending</option>
+                            <option value="Approved" {% if return.status == "Approved" %}selected{% endif %}>Approved</option>
+                            <option value="Rejected" {% if return.status == "Rejected" %}selected{% endif %}>Rejected</option>
+                        </select>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">No return requests found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $(".return-status").change(function() {
+            var returnId = $(this).data("return-id");
+            var newStatus = $(this).val();
+
+            $.ajax({
+                url: "/update-return-status/", // Use the correct URL for updating
+                type: "POST",
+                data: {
+                    'return_id': returnId,
+                    'new_status': newStatus,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    alert(response.message);
+                },
+                error: function(xhr) {
+                    alert("Error updating status.");
+                }
+            });
+        });
+    });
+</script>
+
+{% endblock %}
