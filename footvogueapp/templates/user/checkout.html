@@ -101,7 +101,7 @@
                                 {% endif %}
                             </div>
                             <div>{{ item.quantity }}x {{ item.product_variant.product.name }}</div>
-                            <div>${{ item.total_price|floatformat:2 }}</div>
+                            <div>₹{{ item.total_price|floatformat:2 }}</div>
                         </div>
                         {% endfor %}
                     </div>
@@ -119,17 +119,17 @@
                     </div>
                     <div class="order-col">
                         <div><strong>Subtotal</strong></div>
-                        <div><strong id="subtotal">${{ total_price|floatformat:2 }}</strong></div>
+                        <div><strong id="subtotal">₹{{ total_price|floatformat:2 }}</strong></div>
                     </div>
 
                     <div class="order-col" id="discount-row" style="display: none;">
                         <div>Coupon Discount</div>
-                        <div><strong id="discount-amount">-${{ discount|floatformat:2 }}</strong></div>
+                        <div><strong id="discount-amount">-₹{{ discount|floatformat:2 }}</strong></div>
                     </div>
 
                     <div class="order-col">
                         <div><strong>TOTAL</strong></div>
-                        <div><strong class="order-total" id="final-total">${{ total_price|floatformat:2 }}</strong></div>
+                        <div><strong class="order-total" id="final-total">₹{{ total_price|floatformat:2 }}</strong></div>
                     </div>
                 </div>
 
@@ -151,15 +151,13 @@
                     <button id="razorpay-button" class="btn btn-primary" style="display: none;">Pay with Razorpay</button>
                 
                     <!-- Hidden Form to Submit Razorpay Payment Details -->
-                    
-                        {% csrf_token %}
-                        <input type="hidden" name="payment_method" value="razorpay">
-                        <input type="hidden" id="razorpay_payment_id" name="razorpay_payment_id">
-                        <input type="hidden" id="razorpay_order_id" name="razorpay_order_id" value="{{ razorpay_order_id }}">
-                        <input type="hidden" id="razorpay_signature" name="razorpay_signature">
-                   
+                    <input type="hidden" id="razorpay_payment_id" name="razorpay_payment_id">
+                    <input type="hidden" id="razorpay_order_id" name="razorpay_order_id" value="{{ razorpay_order_id }}">
+                    <input type="hidden" id="razorpay_signature" name="razorpay_signature">
+                
                     <button type="submit" class="primary-btn order-submit">Place Order</button>
                 </form>
+                
                 
             </div>
         </div>
@@ -228,8 +226,8 @@
                 let discount = parseFloat(data.discount);
                 let newTotal = orderTotal - discount;
 
-                document.getElementById("discount-amount").textContent = "-$" + discount.toFixed(2);
-                document.getElementById("final-total").textContent = "$" + newTotal.toFixed(2);
+                document.getElementById("discount-amount").textContent = "-₹" + discount.toFixed(2);
+                document.getElementById("final-total").textContent = "₹" + newTotal.toFixed(2);
                 document.getElementById("discount-row").style.display = "flex";  // Show discount row
 
                 messageBox.textContent = "Coupon applied successfully!";
@@ -247,6 +245,7 @@ document.addEventListener("DOMContentLoaded", function() {
     var razorpayRadio = document.getElementById("payment-razorpay");
     var codRadio = document.getElementById("payment-4");
     var razorpayButton = document.getElementById("razorpay-button");
+    var checkoutForm = document.getElementById("checkout-form");
 
     // Show Razorpay button only if Razorpay is selected
     razorpayRadio.addEventListener("change", function() {
@@ -274,26 +273,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 document.getElementById("razorpay_order_id").value = response.razorpay_order_id;
                 document.getElementById("razorpay_signature").value = response.razorpay_signature;
 
-                // Submit form via AJAX to process order and redirect to order summary
-                var formData = new FormData(document.getElementById("payment-form"));
-
-                fetch("{% url 'place_order' %}", {
-                    method: "POST",
-                    body: formData,
-                    headers: {
-                        "X-CSRFToken": "{{ csrf_token }}"
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Redirect to order summary
-                        window.location.href = "/order_summary/" + data.order_id + "/";
-                    } else {
-                        alert("Payment processing failed. Please try again.");
-                    }
-                })
-                .catch(error => console.error("Error:", error));
+                // Automatically submit the form to place the order
+                checkoutForm.submit();
             },
             "theme": {
                 "color": "#3399cc"
@@ -304,6 +285,7 @@ document.addEventListener("DOMContentLoaded", function() {
         rzp1.open();
     };
 });
+
 
 </script>
 

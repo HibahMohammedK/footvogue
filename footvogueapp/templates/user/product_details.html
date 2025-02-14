@@ -78,20 +78,20 @@
                             <!-- Price and Stock -->
                             <div class="price-section">
                                 {% if best_offer %}
-                                    <p class="special-offer">🎉 Special Offer: {{ best_offer.discount_value }}% OFF!</p>
-                                    <h3 class="product-price">
-                                        <del class="old-price">₹{{ selected_variant.price }}</del>
-                                        <span class="discounted-price">₹{{ discounted_price|floatformat:2 }}</span>
-                                    </h3>
+                                    <p><strong>🎉 Special Offer: {{ best_offer.discount_value }}% OFF!</strong></p>
+                                        <h3 class="product-price">
+                                            <del class="old-price">₹{{ selected_variant.price }}</del>
+                                            <span class="discounted-price">₹{{ discounted_price|floatformat:2 }}</span>
+                                        </h3>
                                 {% else %}
                                     <h3 class="product-price">₹{{ selected_variant.price }}</h3>
                                 {% endif %}
                                 <p class="stock-status">
-                                    {% if selected_variant.stock_quantity > 0 %}
-                                        In Stock ({{ selected_variant.stock_quantity }} available)
-                                    {% else %}
-                                        <span class="out-of-stock">Out of Stock</span>
-                                    {% endif %}
+                                {% if selected_variant.stock_quantity > 0 %}
+                                    In Stock ({{ selected_variant.stock_quantity }} available)
+                                {% else %}
+                                    <span class="out-of-stock">Out of Stock</span>
+                                {% endif %}
                                 </p>
                             </div>
 
@@ -103,36 +103,24 @@
                             <!-- Product Variants -->
                             <div class="product-options">
                                 <!-- Product Details Template -->
-                                <form method="post" action="{% url 'add_to_cart' selected_variant.id %}" id="add-to-cart-form">
+                                <form method="post" action="{% url 'add_to_cart' 0 %}" id="add-to-cart-form">
                                     {% csrf_token %}
                                     <label>
                                         Size
                                         <select class="input-select" name="size" id="size-select" onchange="updateVariant()">
                                             <option value="">Select Size</option>
                                             {% for size in unique_sizes %}
-                                                <option value="{{ size.id }}" 
-                                                    {% if size.id == selected_variant.size.id %}selected{% endif %}>
+                                                <option value="{{ size.id }}" {% if size.id == selected_variant.size.id %}selected{% endif %}>
                                                     {{ size.size_name }} ({{ size.variant_count }})
                                                 </option>
                                             {% endfor %}
                                         </select>
                                     </label>
                                     <input type="hidden" name="variant_id" id="variant-id" value="{{ selected_variant.id }}">
+                                    <input type="hidden" id="variant-map" value='{{ variant_map|safe }}'>
                                 </form>
-                                
-                                <!-- <label>
-                                    Color
-                                    <select class="input-select" name="color" id="color-select" onchange="updateVariant()">
-                                        <option value="">Select Color</option>
-                                        {% for color in unique_colors %}
-                                            <option value="{{ color.id }}" 
-                                                {% if color == selected_variant.color %}selected{% endif %}>
-                                                {{ color.color_name }} ({{ color.variant_count }})
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </label> -->
                             </div>
+                            
 
                          <!-- Add to Cart -->
                             <div class="add-to-cart">
@@ -151,14 +139,14 @@
 
                                     <input type="hidden" name="variant_id" value="{{ selected_variant.id }}">
 
-                                    <button type="submit" class="add-to-cart-btn">
+                                    <button type="submit" class="add-to-cart-btn"  onclick="return updateFormAction()">
                                         <i class="fa fa-shopping-cart"></i> Add to Cart
                                     </button>
                                 </form>
                             </div>
 
                             {% if best_offer %}
-                                <p><strong>🎉 Special Offer: {{ best_offer.discount }}% OFF!</strong></p>
+                                <p><strong>🎉 Special Offer: {{ best_offer.discount_value }}% OFF!</strong></p>
                                 <p><del>₹{{ original_price }}</del> <strong>₹{{ discounted_price|floatformat:2 }}</strong></p>
                             {% else %}
                                 <p>Price: ₹{{ original_price }}</p>
@@ -422,9 +410,9 @@
                     <h4 class="product-price">
                         {% with related_product.productvariant_set.first as variant %}
                             {% if variant %}
-                                ${{ variant.price }}
+                                ₹{{ variant.price }}
                                 {% if variant.old_price %}
-                                    <del class="product-old-price">${{ variant.old_price }}</del>
+                                    <del class="product-old-price">₹{{ variant.old_price }}</del>
                                 {% endif %}
                             {% else %}
                                 Price not available
@@ -589,32 +577,40 @@
             });
         });
     }); 
+
     function updateVariant() {
-    const sizeSelect = document.getElementById("size-select");
-    const selectedSizeId = sizeSelect.value;
-    const variantId = getVariantIdForSize(selectedSizeId);
+    var sizeSelect = document.getElementById("size-select");
+    var selectedSizeId = sizeSelect.value;
+    
+    var variantMapInput = document.getElementById("variant-map");
+    var variantMap = JSON.parse(variantMapInput.value);
+    
+    var variantIdInput = document.getElementById("variant-id");
 
-    console.log(`Selected Size ID: ${selectedSizeId}, Variant ID: ${variantId}`);
-
-    // Update the hidden input field
-    const variantInput = document.getElementById("variant-id");
-    if (variantInput) {
-        variantInput.value = variantId;
-        console.log(`Updated hidden input value to: ${variantId}`);
-    }
-
-    // Update the form action URL
-    const addToCartForm = document.querySelector(".add-to-cart form");
-    if (addToCartForm) {
-        addToCartForm.action = `/add-to-cart/${variantId}/`;
-        console.log(`Updated form action to: ${addToCartForm.action}`);
+    console.log("Selected Size ID:", selectedSizeId);
+    console.log("Variant Map:", variantMap);
+    
+    if (variantMap[selectedSizeId]) {
+        variantIdInput.value = variantMap[selectedSizeId];
+        console.log("Updated Variant ID:", variantIdInput.value);
+    } else {
+        console.warn("No matching variant found for selected size!");
     }
 }
 
-function getVariantIdForSize(sizeId) {
-    const variantMapping = JSON.parse('{{ variant_map|safe }}');
-    console.log("Variant Mapping:", variantMapping);  // Debug output
-    return variantMapping[sizeId] || "";
+function updateFormAction() {
+    updateVariant(); // Ensure the variant ID updates
+    var form = document.getElementById("add-to-cart-form");
+    var variantId = document.getElementById("variant-id").value;
+
+    if (variantId) {
+        form.action = "/add_to_cart/" + variantId + "/";
+        console.log("Updated Form Action:", form.action);
+        return true; // Allow submission
+    } else {
+        alert("Please select a size before adding to cart.");
+        return false; // Prevent submission
+    }
 }
 
 </script>

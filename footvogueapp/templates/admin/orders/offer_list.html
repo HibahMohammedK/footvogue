@@ -100,8 +100,8 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 
-    // Fetch referral offers
-    function fetchReferralOffers() {
+     // Fetch referral offers
+     function fetchReferralOffers() { 
         fetch("/api/referral-offers/")
             .then(response => response.json())
             .then(data => {
@@ -117,10 +117,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     let row = `
                         <tr class="referral-row">
                             <td>${offer.id}</td>
-                            <td>${offer.referrer}</td>
-                            <td>${offer.referred_user}</td>
-                            <td>${offer.reward_amount}</td>
-                            <td>${offer.is_claimed ? "✔️" : "❌"}</td>
+                            <td>${offer.referrer.username}</td>
+                            <td>${offer.referred_user.username}</td>
+                            <td>${offer.reward_amount}</td>  <!-- Corrected field -->
+                            <td>${offer.reward_claimed ? "✔️" : "❌"}</td>
                             <td>
                                 <button class="delete-offer" data-id="${offer.id}" style="color: red;">🗑️ Delete</button>
                             </td>
@@ -134,8 +134,9 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 
+
     // Handle delete button clicks
-        document.addEventListener("click", function (e) {
+    document.addEventListener("click", function (e) {
         if (e.target.classList.contains("delete-offer")) {
             const offerId = e.target.getAttribute("data-id");
             if (confirm("Are you sure you want to delete this offer?")) {
@@ -160,8 +161,9 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         }
     });
-
 });
+
+
 
 // Show/hide tabs
 function showTab(tabId) {

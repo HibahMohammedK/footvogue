@@ -60,7 +60,7 @@
 						<li><!-- Wallet -->
 							<div>
 								<a href="{% url 'wallet' %}" class="nav-link">
-									<i class="fa fa-wallet"></i> 
+									<i class="fa fa-rupee"></i> 
 									<span>Your Wallet</span>
 									
 								</a>
@@ -100,10 +100,9 @@
 							<div class="header-search">
 								<form id="search-form">
 									<select class="input-select" id="category-select">
-										<!-- Categories will be populated dynamically -->
 										<option value="0">All Categories</option>
 										{% for category in categories %}
-											<option value="{{ category.id }}">{{ category.category_name }}</option>
+										<option value="{{ category.id }}">{{ category.category_name }}</option>
 										{% endfor %}
 									</select>
 									<input class="input" id="search-input" placeholder="Search here" />
@@ -229,7 +228,12 @@
 		  </div>
 		  {% endif %}
 <main>
+
+
 {% block content %}
+	<!-- Search Results -->
+	<div id="search-results"></div>
+		
 	
 		<!-- SECTION -->
 		<div class="section">
@@ -465,7 +469,7 @@
 											<div class="product-body">
 												<p class="product-category">Category</p>
 												<h3 class="product-name"><a href="#">product name goes here</a></h3>
-												<h4 class="product-price">$980.00 <del class="product-old-price">$990.00</del></h4>
+												<h4 class="product-price">₹980.00 <del class="product-old-price">₹990.00</del></h4>
 												<div class="product-rating">
 													<i class="fa fa-star"></i>
 													<i class="fa fa-star"></i>
@@ -496,7 +500,7 @@
 											<div class="product-body">
 												<p class="product-category">Category</p>
 												<h3 class="product-name"><a href="#">product name goes here</a></h3>
-												<h4 class="product-price">$980.00 <del class="product-old-price">$990.00</del></h4>
+												<h4 class="product-price">₹980.00 <del class="product-old-price">₹990.00</del></h4>
 												<div class="product-rating">
 												</div>
 												<div class="product-btns">
@@ -1021,20 +1025,74 @@
 	</body>
 </html>
 <script>
-// Handle form submission
-    document.getElementById('search-form').addEventListener('submit', function (e) {
-        e.preventDefault();
+document.addEventListener("DOMContentLoaded", function () {
+    let searchInput = document.getElementById("search-input");
 
-        let category = document.getElementById('category-select').value;
-        let query = document.getElementById('search-input').value;
+    if (searchInput) {  // Ensure the element exists
+        searchInput.addEventListener("input", function () {
+            let query = this.value.trim();
+            let categorySelect = document.getElementById("category-select");
 
-        // Send the data to the back-end
-        fetch(`/search-results/?category=${category}&query=${query}`)
-            .then(response => response.json())
-            .then(data => {
-                // Process the search results
-                console.log(data);  // Update the page with results
-            })
-            .catch(error => console.error('Error:', error));
-    });
+            if (!categorySelect) {
+                console.error("❌ Category select element not found.");
+                return;
+            }
+
+            let category = categorySelect.value;
+
+            if (query.length < 2) {  // Only search if more than 1 character
+                document.getElementById("search-results").innerHTML = "";
+                return;
+            }
+
+            fetch(`/search-results/?category=${category}&query=${query}`)
+                .then(response => response.json())
+                .then(data => {
+                    let searchResultsContainer = document.getElementById("search-results");
+                    
+                    if (!searchResultsContainer) {
+                        console.error("❌ Search results container not found.");
+                        return;
+                    }
+
+                    searchResultsContainer.innerHTML = "";
+
+                    if (data.results.length === 0) {
+                        searchResultsContainer.innerHTML = "<p>No products found.</p>";
+                        return;
+                    }
+
+                    let rowDiv = document.createElement("div");
+                    rowDiv.classList.add("row");
+
+                    data.results.forEach(product => {
+                        let productHTML = `
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="product">
+                                    <a href="/product-details/${product.id}/" style="text-decoration: none; color: inherit;">
+                                        <div class="product-img">
+                                            <img src="${product.image_url}" alt="${product.name}">
+                                        </div>
+                                        <div class="product-body">
+                                            <p class="product-category">${product.category}</p>
+                                            <h3 class="product-name"><a href="#">${product.name}</a></h3>
+                                            <h4 class="product-price">₹${product.price}</h4>
+                                        </div>
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+
+                        rowDiv.innerHTML += productHTML;
+                    });
+
+                    searchResultsContainer.appendChild(rowDiv);
+                })
+                .catch(error => console.error("❌ Error fetching search results:", error));
+        });
+    } else {
+        console.error("❌ Search input element not found.");
+    }
+});
+
 </script>

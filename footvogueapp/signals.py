@@ -6,44 +6,49 @@ from decimal import Decimal
 
 @receiver(post_save, sender=Order)
 def handle_referral_reward(sender, instance, created, **kwargs):
-    if created and instance.user.referral:  # Check if the user has a referrer
-        referral = instance.user.referral  # ✅ Get the referral instance
-        referrer = referral.referrer  # ✅ Get the referrer (CustomUser instance)
-        referred_user = instance.user  # ✅ Get the referred user (who placed the order)
+    if created:
+        # ✅ Safely check if the user has a referral
+        referral = getattr(instance.user, "referral", None)
 
-        # Find an active referral offer
-        referral_offer = ReferralOffer.objects.filter(offer__offer_type="referral", offer__is_active=True).first()
+        if referral:  # Only proceed if the user has a referral
+            referrer = referral.referrer  # ✅ Get the referrer
+            referred_user = instance.user  # ✅ Get the referred user
 
-        if referral_offer:
-            reward_amount = Decimal(str(referral_offer.reward_amount))  # ✅ Ensure it's a Decimal
+            # Find an active referral offer
+            referral_offer = ReferralOffer.objects.filter(
+                offer__offer_type="referral", offer__is_active=True
+            ).first()
 
-            # ✅ Reward the referrer
-            referrer_wallet, _ = Wallet.objects.get_or_create(user=referrer)
-            referrer_wallet.balance = Decimal(str(referrer_wallet.balance)) + reward_amount
-            referrer_wallet.save()
+            if referral_offer:
+                reward_amount = Decimal(str(referral_offer.reward_amount))  # ✅ Ensure it's a Decimal
 
-            # ✅ Reward the referred user
-            referred_wallet, _ = Wallet.objects.get_or_create(user=referred_user)
-            referred_wallet.balance = Decimal(str(referred_wallet.balance)) + reward_amount
-            referred_wallet.save()
+                # ✅ Reward the referrer
+                referrer_wallet, _ = Wallet.objects.get_or_create(user=referrer)
+                referrer_wallet.balance += reward_amount
+                referrer_wallet.save()
 
-            # ✅ Mark the referral as "reward claimed"
-            referral.reward_claimed = True
-            referral.save()
+                # ✅ Reward the referred user
+                referred_wallet, _ = Wallet.objects.get_or_create(user=referred_user)
+                referred_wallet.balance += reward_amount
+                referred_wallet.save()
 
-            # ✅ Log the transactions for tracking
-            Transaction.objects.create(
-                wallet=referrer_wallet,
-                amount=reward_amount,
-                transaction_type="Credit",
-                status="Completed",
-            )
+                # ✅ Mark the referral as "reward claimed"
+                referral.reward_claimed = True
+                referral.save()
 
-            Transaction.objects.create(
-                wallet=referred_wallet,
-                amount=reward_amount,
-                transaction_type="Credit",
-                status="Completed",
-            )
+                # ✅ Log the transactions for tracking
+                Transaction.objects.create(
+                    wallet=referrer_wallet,
+                    amount=reward_amount,
+                    transaction_type="Credit",
+                    status="Completed",
+                )
 
-            print(f"✅ Referral Reward Applied: ₹{reward_amount} to {referrer} & {referred_user}")
+                Transaction.objects.create(
+                    wallet=referred_wallet,
+                    amount=reward_amount,
+                    transaction_type="Credit",
+                    status="Completed",
+                )
+
+                print(f"✅ Referral Reward Applied: ₹{reward_amount} to {referrer} & {referred_user}")

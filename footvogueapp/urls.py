@@ -73,7 +73,7 @@ urlpatterns = [
     path('offers/', views.offer_list, name='offer_list'),
     path('create/', views.create_offer, name='create_offer'),  # Create a new offer
     path("api/offers/", views.get_offers, name="get_offers"),
-    path("api/referral-offers/", views.get_referral_offers, name="get_referral_offers"),
+    path("api/referral-offers/", views.get_referral_offers, name="referral_offers_api"),
     path("api/offers/<int:offer_id>/delete/", views.delete_offer, name="delete_offer"),
     path('toggle/<int:offer_id>/', views.toggle_offer_status, name='toggle_offer_status'),  # Activate/deactivate offer
 

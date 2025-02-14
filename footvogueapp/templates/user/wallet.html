@@ -27,6 +27,8 @@
                         <span class="text-success">Credit</span>
                     {% elif transaction.transaction_type == "Debit" %}
                         <span class="text-danger">Debit</span>
+                    {% elif transaction.transaction_type == "Refund" %}
+                        <span class="text-success">Refund</span>
                     {% else %}
                         <span class="text-secondary">Unknown</span>
                     {% endif %}

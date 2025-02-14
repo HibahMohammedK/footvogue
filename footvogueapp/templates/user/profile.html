@@ -120,7 +120,7 @@
                     <li><a href="#"><i class="fa fa-map-marker"></i> 1734 Stonecoal Road</a></li>
                 </ul>
                 <ul class="header-links pull-right">
-                    <li><a href="#"><i class="fa fa-dollar"></i> USD</a></li>
+                    <li><a href="{% url 'wallet' %}"><i class="fa fa-rupee"></i> Wallet </a></li>
                     {% if user.is_authenticated %}
                         <li><a href="{% url 'profile' %}"><i class="fa fa-user-o"></i>{{ user.get_full_name|default:user.username }}
                         </a></li>
@@ -170,15 +170,15 @@
                     <!-- ACCOUNT -->
                     <div class="col-md-3 clearfix">
                         <div class="header-ctn">
-                            <!-- Wishlist -->
-                            <div>
-                                <a href="#">
-                                    <i class="fa fa-heart-o"></i>
-                                    <span>Your Wishlist</span>
-                                    <div class="qty">2</div>
-                                </a>
-                            </div>
-                            <!-- /Wishlist -->
+                            	<!-- Wishlist -->
+								<div>
+									<a href="{% url 'wishlist_view' %}">
+										<i class="fa fa-heart-o"></i>
+										<span>Your Wishlist</span>
+										<div class="qty">{{ wishlist_items|length }}</div> <!-- Dynamic wishlist count -->
+									</a>
+								</div>
+								<!-- /Wishlist -->
 
                             <!-- Cart -->
                             <div class="dropdown">
@@ -327,7 +327,7 @@
                                     <li class="list-group-item">
                                         <h6>Order #{{ order.id }}</h6>
                                         <p><strong>Status:</strong> {{ order.status }}</p>
-                                        <p><strong>Total Amount:</strong> ${{ order.total_amount|floatformat:2 }}</p>
+                                        <p><strong>Total Amount:</strong> ₹{{ order.total_amount|floatformat:2 }}</p>
                     
                                         <div class="order-items">
                                             {% for item in order.items %}
@@ -346,14 +346,14 @@
                                                         <p><strong>{{ item.product_name }}</strong></p>
                                                         <p>{{ item.color }} - {{ item.size }}</p>
                                                         <p>Quantity: {{ item.quantity }}</p>
-                                                        <p>Price: ${{ item.price|floatformat:2 }}</p>
+                                                        <p>Price: ₹{{ item.price|floatformat:2 }}</p>
                                                     </div>
                                                 </div>
                                             {% endfor %}
                                         </div>
                                        <!-- Cancel Order Button -->
                                         {% if order.status != 'Cancelled' and order.status != 'Completed' and order.status != 'Delivered' %}
-                                        <form method="POST" action="{% url 'profile' %}">
+                                        <form method="POST" action="{% url 'user_cancel_order' order.id %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="order_id" value="{{ order.id }}">
                                             <button type="submit" name="cancel_order" class="btn btn-danger btn-sm">Cancel Order</button>

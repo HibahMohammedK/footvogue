@@ -115,7 +115,7 @@
                                         <h4 class="product-price">
                                             {% with product.productvariant_set.first as variant %}
                                                 {% if variant %}
-                                                ${{ variant.price }}
+                                                ₹{{ variant.price }}
                                                 {% else %}
                                                 Price not available
                                                 {% endif %}

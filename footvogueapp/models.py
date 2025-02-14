@@ -18,7 +18,7 @@ class CustomUser(AbstractUser):
     is_staff = models.BooleanField(default=False)  # Whether the user is an admin
     created_at = models.DateTimeField(auto_now_add=True)  # Timestamp when the user was created
     updated_at = models.DateTimeField(auto_now=True)  # Timestamp when the user was last updated
-    referral_code = models.CharField(max_length=20, unique=True, blank=True)
+    referral_code = models.CharField(max_length=20, unique=True, blank=True,  null=True)
 
     def save(self, *args, **kwargs):
         if not self.referral_code:
@@ -412,7 +412,7 @@ class ReferralOffer(models.Model):
 
 class Referral(models.Model):
     referrer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="referrals_made")
-    referred_user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="referral")
+    referred_user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="referral", null=True, blank=True)
     reward_claimed = models.BooleanField(default=False)
 
     def grant_reward(self):
@@ -454,6 +454,7 @@ class Transaction(models.Model):
     TRANSACTION_TYPE_CHOICES = [
         ('Credit', 'Credit'),
         ('Debit', 'Debit'),
+        ('Refund','Refund'),
     ]
 
     STATUS_CHOICES = [

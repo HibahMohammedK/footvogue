@@ -28,6 +28,10 @@ from django.http import JsonResponse, HttpResponse
 from reportlab.pdfgen import canvas
 import razorpay
 from django.views.decorators.csrf import csrf_exempt
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from datetime import timezone as dt_timezone
 
    
 
@@ -72,20 +76,37 @@ def home(request):
     # Render the home template with products and rating range
     return render(request, 'user/home.html', context)
 
+
 def search_results(request):
-    category_id = request.GET.get('category', '0')
-    query = request.GET.get('query', '')
+    category_id = request.GET.get("category", "0")
+    query = request.GET.get("query", "")
 
     # Filter products based on the search query and category
-    if category_id == '0':
+    if category_id == "0":
         products = Product.objects.filter(name__icontains=query)
     else:
         products = Product.objects.filter(category_id=category_id, name__icontains=query)
 
-    # Prepare the results for the front-end
-    product_data = [{'name': product.name, 'price': product.price} for product in products]
+    product_data = []
+    for product in products:
+        variant = product.productvariant_set.first()  # Get the first variant
+        price = float(variant.price) if variant else "Price not available"
 
-    return JsonResponse({'results': product_data})
+        product_image = None
+        if variant:
+            first_image = variant.productimage_set.first()
+            product_image = first_image.image_url.url if first_image else "/static/images/no-image-available.png"
+
+        product_data.append({
+            "id": product.id,
+            "name": product.name,
+            "category": product.category.category_name,
+            "price": price,
+            "image_url": product_image,
+        })
+
+    return JsonResponse({"results": product_data})
+
 @never_cache
 def register_view(request):
     if request.method == "POST":
@@ -93,6 +114,7 @@ def register_view(request):
         email = request.POST.get("email").strip()
         password = request.POST.get("password").strip()
         confirm_password = request.POST.get("confirm_password").strip()
+        phone_number = request.POST.get("phone_number").strip()
         referral_code = request.POST.get("referral_code", "").strip()  # Get referral code (if provided)
 
         if password != confirm_password:
@@ -120,6 +142,7 @@ def register_view(request):
             username=username,
             email=email,
             password=password,
+            phone_number=phone_number,
             is_verified=False
         )
         user.save()
@@ -566,21 +589,44 @@ def change_order_status(request, order_id):
 @never_cache
 @login_required
 def admin_cancel_order(request, order_id):
-    """
-    Allows an admin to cancel any order.
-    """
     if not request.user.is_staff:
         messages.error(request, "You do not have the required permissions to cancel orders.")
         return redirect('home')
 
     order = get_object_or_404(Order, id=order_id)
-    if order.status in ['Pending', 'Processing']:
-        order.status = 'Cancelled'
-        order.save()
-        messages.success(request, f"Order #{order.id} has been successfully cancelled.")
+
+    if order.status in ["Pending", "Processing"]:
+        with transaction.atomic():  # Ensure safe database updates
+            order.status = "Cancelled"
+            order.save()
+
+            # ✅ Process refund if order was paid
+            if order.payment_status == "Paid":
+                refund_amount = Decimal(str(order.total_amount))  # Ensure Decimal type
+                
+                # ✅ Get or create the user's wallet
+                wallet, _ = Wallet.objects.get_or_create(user=order.user)
+
+                # ✅ Add refunded amount to the wallet
+                wallet.balance += refund_amount
+                wallet.save()
+
+                # ✅ Log the refund transaction
+                Transaction.objects.create(
+                    wallet=wallet,
+                    amount=refund_amount,
+                    transaction_type="Refund",
+                    status="Completed",
+                )
+
+                messages.success(request, f"Order #{order.id} has been cancelled. ₹{refund_amount} has been refunded to the user's wallet.")
+            else:
+                messages.success(request, f"Order #{order.id} has been cancelled.")
+
     else:
         messages.error(request, "Order cannot be cancelled.")
-    return redirect('order_management')  # Redirect to the admin order management page
+    
+    return redirect('order_management')  # Redirect to admin order management page
 
 
 #####   user products  #####
@@ -743,7 +789,7 @@ def product_details(request, product_id, variant_id=None):
         'original_price': selected_variant.price,
         'unique_sizes': unique_sizes,
         'unique_color_variants': unique_color_variants,
-       'variant_map': json.dumps(variant_map),
+        'variant_map': json.dumps(variant_map),
     }
     return render(request, 'user/product_details.html', context)
 
@@ -920,23 +966,6 @@ def delete_address(request, id):
         return redirect('/profile?tab=addresses')
     return redirect('/profile?tab=addresses')
 
-@never_cache
-@login_required
-def user_cancel_order(request, order_id):
-    """
-    Allows a user to cancel their own orders if they meet the criteria.
-    """
-    order = get_object_or_404(Order, id=order_id, user=request.user)
-    if order.status in ['Pending', 'Processing']:
-        order.status = 'Cancelled'
-        order.save()
-        messages.success(request, f"Order #{order.id} has been successfully cancelled.")
-    else:
-        messages.error(request, "Order cannot be cancelled.")
-    return redirect('profile')  # Redirect to the user's profile
-
-
-
 
 def change_password(request):
     if request.method == 'POST':
@@ -1019,25 +1048,48 @@ def remove_from_cart(request, cart_item_id):
     cart_item.delete()
     messages.success(request, "Item removed from the cart.")
     return redirect('cart_view')
-
-
 @login_required
 def checkout(request):
     user = request.user
     cart_items = Cart.get_user_cart(user)
     total_price = sum(item.get_discounted_total() for item in cart_items)
-    total_price_paise = int(total_price * 100)  # Convert to paise
+    discount = request.session.get("discount", 0)  # Get discount from session if available
+    applied_coupon_code = request.session.get("applied_coupon", None)  # Get coupon from session
+    shipping_address = None
 
-    # Razorpay setup
+    # Apply discount if a coupon is already stored in session
+    if applied_coupon_code:
+        try:
+            coupon = Coupon.objects.get(
+                coupon_code=applied_coupon_code, 
+                is_active=True, 
+                expiration_date__gt=timezone.now()
+            )
+            if total_price >= coupon.min_purchase:
+                discount = coupon.calculate_discount(total_price)
+            else:
+                # Remove invalid coupon from session
+                del request.session["applied_coupon"]
+                del request.session["discount"]
+                messages.error(request, "Coupon no longer valid. Minimum purchase not met.")
+        except Coupon.DoesNotExist:
+            del request.session["applied_coupon"]
+            del request.session["discount"]
+            messages.error(request, "Invalid coupon code.")
+
+    # Recalculate final price after discount
+    final_price = total_price - discount
+    total_price_paise = int(final_price * 100)  # Convert to paise for Razorpay
+
+    # ✅ Move Razorpay order creation after discount application
     client = razorpay.Client(auth=(settings.RAZORPAY_API_KEY, settings.RAZORPAY_API_SECRET))
     razorpay_order = client.order.create({
-        'amount': total_price_paise,  
+        'amount': total_price_paise,  # ✅ Now using the discounted price
         'currency': 'INR',
         'payment_capture': '1',
     })
-    razorpay_order_id = razorpay_order['id']  
+    razorpay_order_id = razorpay_order['id']
 
-    # Cart data for display
     cart_data = [
         {
             'id': item.id,
@@ -1047,14 +1099,11 @@ def checkout(request):
             'price': item.product_variant.get_discounted_price(),
             'quantity': item.quantity,
             'total_price': item.get_discounted_total(),
-            'image_url': ProductImage.objects.filter(variant=item.product_variant).first().image_url.url if ProductImage.objects.filter(variant=item.product_variant).exists() else None,
+            'image_url': ProductImage.objects.filter(variant=item.product_variant).first().image_url.url 
+                        if ProductImage.objects.filter(variant=item.product_variant).exists() else None,
         }
         for item in cart_items
     ]
-
-    discount = 0
-    applied_coupon_code = None
-    shipping_address = None
 
     if request.method == "POST":
         # Handling Coupon Code
@@ -1074,6 +1123,19 @@ def checkout(request):
                     request.session["discount"] = float(discount)
                     applied_coupon_code = coupon_code
                     messages.success(request, f"Coupon applied! Discount: ₹{discount}")
+
+                    # ✅ Recalculate final price after applying the coupon
+                    final_price = total_price - discount
+                    total_price_paise = int(final_price * 100)
+
+                    # ✅ Update Razorpay order with new discounted price
+                    razorpay_order = client.order.create({
+                        'amount': total_price_paise,  
+                        'currency': 'INR',
+                        'payment_capture': '1',
+                    })
+                    razorpay_order_id = razorpay_order['id']
+
             except Coupon.DoesNotExist:
                 messages.error(request, "Invalid coupon code")
 
@@ -1087,7 +1149,6 @@ def checkout(request):
             except Address.DoesNotExist:
                 messages.error(request, "Invalid address selected.")
         else:
-            # Use AddressForm to create a new address
             address_form = AddressForm(request.POST)
             if address_form.is_valid():
                 new_address = address_form.save(commit=False)
@@ -1101,11 +1162,12 @@ def checkout(request):
                     "cart_items": cart_data,
                     "total_price": total_price,
                     "discount": discount,
+                    "final_price": final_price,
                     "total_price_paise": total_price_paise,
                     "applied_coupon": applied_coupon_code,
                     "shipping_address": shipping_address,
                     "razorpay_order_id": razorpay_order_id,
-                    "address_form": address_form,  # Pass form to template
+                    "address_form": address_form,  
                 })
 
     # Retrieve the selected shipping address
@@ -1117,13 +1179,22 @@ def checkout(request):
         "cart_items": cart_data,
         "total_price": total_price,
         "discount": discount,
+        "final_price": final_price,
         "total_price_paise": total_price_paise,
         "applied_coupon": applied_coupon_code,
         "shipping_address": shipping_address,
         "razorpay_order_id": razorpay_order_id,
-        "address_form": AddressForm(),  # Provide an empty form for new addresses
+        "address_form": AddressForm(),
     })
-    
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db import transaction
+import razorpay
+from django.conf import settings
+
+from .models import Cart, Order, OrderItem, Address, Coupon
+
 @login_required
 @transaction.atomic
 def place_order(request):
@@ -1137,9 +1208,14 @@ def place_order(request):
     subtotal = sum(item.total_price() for item in cart_items)
     total_discount = request.session.get("discount", 0)
     final_price = subtotal - total_discount
-    applied_coupon = request.session.get("applied_coupon")
+    applied_coupon_id = request.session.get("applied_coupon")
+
+    applied_coupon = None
+    if applied_coupon_id:
+        applied_coupon = Coupon.objects.filter(id=applied_coupon_id).first()
 
     if request.method == "POST":
+        print(request.POST)  # Debugging line to check POST data
         payment_method = request.POST.get("payment_method", "cod")
         shipping_address_id = request.session.get("shipping_address_id")
 
@@ -1151,12 +1227,11 @@ def place_order(request):
 
         # Handle different payment methods
         if payment_method == "razorpay":
-            # Razorpay-specific validation
             razorpay_payment_id = request.POST.get("razorpay_payment_id")
             razorpay_order_id = request.POST.get("razorpay_order_id")
             razorpay_signature = request.POST.get("razorpay_signature")
 
-            if not all([razorpay_payment_id, razorpay_order_id, razorpay_signature]):
+            if not razorpay_payment_id or not razorpay_order_id or not razorpay_signature:
                 messages.error(request, "Payment details missing. Please complete the payment.")
                 return redirect("checkout")
 
@@ -1173,10 +1248,10 @@ def place_order(request):
                 messages.error(request, "Payment verification failed. Please try again.")
                 return redirect("checkout")
         else:
-            # COD handling
+            # Cash on Delivery (COD)
             payment_status = 'Pending'
 
-        # Create order (common for both payment methods)
+        # ✅ Create order (without referral_code since it's not in the model)
         order = Order.objects.create(
             user=user,
             shipping_address=shipping_address,
@@ -1187,9 +1262,10 @@ def place_order(request):
             status="Processing" if payment_status == "Paid" else "Pending",
             payment_status=payment_status,
             payment_method=payment_method,
+            razorpay_payment_id=razorpay_payment_id if payment_method == "razorpay" else None,
         )
 
-        # Create order items
+        # Create order items and reduce stock
         for cart_item in cart_items:
             variant = cart_item.product_variant
             OrderItem.objects.create(
@@ -1201,7 +1277,7 @@ def place_order(request):
             variant.stock_quantity -= cart_item.quantity
             variant.save()
 
-        # Clear cart and session
+        # Clear cart and session data
         cart_items.delete()
         for key in ["applied_coupon", "discount", "shipping_address_id"]:
             request.session.pop(key, None)
@@ -1254,21 +1330,44 @@ def order_summary(request, order_id):
     })
 
 
-
+from decimal import Decimal
 
 @login_required
-def cancel_order(request, order_id):
+def user_cancel_order(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
 
     if order.status in ["Pending", "Processing"]:  # Check if order is cancellable
-        order.status = "Cancelled"
-        order.save()
-        messages.success(request, "Your order has been cancelled.")
+        with transaction.atomic():  # Ensure atomicity for database updates
+            order.status = "Cancelled"
+            order.save()
+
+            # ✅ Refund logic: Check if the order was paid
+            if order.payment_status == "Paid":
+                refund_amount = Decimal(str(order.total_amount))  # Ensure Decimal type
+                
+                # ✅ Get or create user's wallet
+                wallet, _ = Wallet.objects.get_or_create(user=request.user)
+                
+                # ✅ Add refunded amount to the wallet
+                wallet.balance += refund_amount
+                wallet.save()
+
+                # ✅ Log the refund transaction
+                Transaction.objects.create(
+                    wallet=wallet,
+                    amount=refund_amount,
+                    transaction_type="Refund",
+                    status="Completed",
+                )
+
+                messages.success(request, f"Your order has been cancelled. ₹{refund_amount} has been refunded to your wallet.")
+            else:
+                messages.success(request, "Your order has been cancelled.")
+
     else:
         messages.error(request, "This order cannot be cancelled.")
 
-    return redirect("profile")
-
+    return redirect("profile")  # Redirect to user profile or orders page
 
 
 # -------------- OFFER MANAGEMENT -------------- #
@@ -1304,21 +1403,22 @@ def get_offers(request):
 
     return JsonResponse(offer_list, safe=False)
 
-@require_http_methods(["GET"])
-def get_referral_offers(request):
-    """
-    API endpoint to fetch all referral offers.
-    """
-    referral_offers = ReferralOffer.objects.all().order_by("-id")
-    referral_list = []
+from django.views.decorators.http import require_GET
 
-    for referral in referral_offers:
+@require_GET
+def get_referral_offers(request):
+    referrals = Referral.objects.select_related("referrer", "referred_user").all().order_by("-id")
+    referral_offer = ReferralOffer.objects.first()  # Assuming a single referral offer exists
+    reward_amount = referral_offer.reward_amount if referral_offer else 0  # Default to 0 if no offer
+
+    referral_list = []
+    for referral in referrals:
         referral_data = {
             "id": referral.id,
-            "referrer": referral.referrer.username,
-            "referred_user": referral.referred_user.username,
-            "reward_amount": referral.reward_amount,
-            "is_claimed": referral.is_claimed,
+            "referrer": {"id": referral.referrer.id, "username": referral.referrer.username},
+            "referred_user": {"id": referral.referred_user.id, "username": referral.referred_user.username},
+            "reward_amount": str(reward_amount),  # Convert Decimal to string for JSON serialization
+            "reward_claimed": referral.reward_claimed,
         }
         referral_list.append(referral_data)
 
@@ -1446,7 +1546,7 @@ def coupon_list(request):
     # Regular page rendering for first load or page navigation
     return render(request, 'admin/orders/coupon_list.html', {'coupons': page})
 
-def add_coupon(request):
+def add_coupon(request): 
     if request.method == 'POST':
         coupon_code = request.POST.get('coupon_code')
         discount_type = request.POST.get('discount_type')  # Ensure this is being sent
@@ -1482,10 +1582,9 @@ def add_coupon(request):
         
         return redirect('coupon_list')  # Redirect to coupon list after creation
 
-    categories = Category.objects.all()  # Assuming Category is a model in your app
-    users = CustomUser.objects.all()  # Assuming CustomUser is the user model
+    categories = Category.objects.all() 
+    users = CustomUser.objects.all() 
     return render(request, 'admin/orders/add_coupon.html', {'categories': categories, 'users': users})
-
 
 def edit_coupon(request, coupon_id):
     coupon = get_object_or_404(Coupon, id=coupon_id)
@@ -1602,7 +1701,6 @@ def sales_report(request):
 
     return render(request, 'admin/sales_report.html', context)
 
-
 def download_sales_report(request, report_type):
     """Exports sales report to PDF or Excel."""
     filter_type = request.GET.get('filter', 'daily')
@@ -1621,7 +1719,6 @@ def download_sales_report(request, report_type):
             start_date = today.replace(day=1)
             end_date = today
         elif filter_type == "custom" and start_date and end_date:
-            # 🔹 Use dateutil.parser to handle different date formats
             start_date = parser.parse(start_date).date()
             end_date = parser.parse(end_date).date()
         else:
@@ -1629,31 +1726,50 @@ def download_sales_report(request, report_type):
     except ValueError:
         return JsonResponse({"error": "Invalid date format"}, status=400)
 
-    # Filter orders based on date range
     orders = Order.objects.filter(order_date__date__range=[start_date, end_date])
 
-    # PDF Export
+    # PDF Export with Table
     if report_type == "pdf":
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'attachment; filename="sales_report.pdf"'
-        pdf = canvas.Canvas(response)
-        pdf.drawString(100, 800, f"Sales Report ({start_date} to {end_date})")
-        y_position = 780
 
+        pdf = SimpleDocTemplate(response, pagesize=letter)
+        elements = []
+        
+        data = [["Order ID", "Order Date", "Total Amount", "Discount"]]  # Table Header
         for order in orders:
-            y_position -= 20
-            pdf.drawString(100, y_position, f"Order ID: {order.id}, Amount: ${order.total_amount}, Discount: ${order.discount}")
-
-        pdf.showPage()
-        pdf.save()
+            data.append([order.id, order.order_date.strftime('%Y-%m-%d'), f"${order.total_amount}", f"${order.discount}"])
+        
+        table = Table(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        
+        elements.append(table)
+        pdf.build(elements)
         return response
 
     # Excel Export
     elif report_type == "excel":
         if orders.exists():
-            df = pd.DataFrame(list(orders.values("id", "order_date", "total_amount", "discount")))
+            data = []
+            for order in orders:
+                data.append({
+                    "ID": order.id,
+                    "Order Date": order.order_date.astimezone(dt_timezone.utc).replace(tzinfo=None),  # ✅ Fixed
+                    "Total Amount": order.total_amount,
+                    "Discount": order.discount,
+                })
+
+            df = pd.DataFrame(data)
+
         else:
-            df = pd.DataFrame(columns=["ID", "Order Date", "Total Amount", "Discount"])  # Handle empty data
+            df = pd.DataFrame(columns=["ID", "Order Date", "Total Amount", "Discount"])
 
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename="sales_report.xlsx"'
@@ -1661,6 +1777,7 @@ def download_sales_report(request, report_type):
         return response
 
     return JsonResponse({"error": "Invalid report type"}, status=400)
+
 
 @login_required
 def wishlist_view(request):
@@ -1766,7 +1883,7 @@ def is_admin(user):
 def request_return(request, order_item_id):
     """Allow users to request a return with a predefined reason and optional additional notes."""
     
-    order_item = get_object_or_404(OrderItem, id=order_item_id, order__user=request.user)
+    order_item = get_object_or_404(OrderItem, order_id=order_item_id, order__user=request.user)
 
     if request.method == "POST":
         reason_id = request.POST.get("reason")
@@ -1815,7 +1932,8 @@ def admin_return_requests(request):
     return render(request, "admin/orders/admin_return.html", {"returns": returns})
 
 
-# ✅ Admin: Approve or reject a return request
+
+
 @csrf_exempt  # Allows AJAX POST requests
 def update_return_status(request):
     if request.method == "POST":
@@ -1824,10 +1942,40 @@ def update_return_status(request):
 
         try:
             return_request = ReturnRequest.objects.get(id=return_id)
+            order_item = return_request.order_item  
+            order = order_item.order
+            
+            # Update return status
             return_request.status = new_status
             return_request.save()
+
+            # ✅ Process refund if return is approved and order was paid
+            if new_status == "Approved" and order.payment_status == "Paid":
+                refund_amount = Decimal(str(order.total_amount))  # Ensure Decimal type
+                
+                # ✅ Get or create the user's wallet
+                wallet, _ = Wallet.objects.get_or_create(user=order.user)
+
+                # ✅ Add refunded amount to the wallet
+                wallet.balance += refund_amount
+                wallet.save()
+
+                # ✅ Log the refund transaction
+                Transaction.objects.create(
+                    wallet=wallet,
+                    amount=refund_amount,
+                    transaction_type="Refund",
+                    status="Completed",
+                )
+
+                return JsonResponse({
+                    "message": f"Return approved. ₹{refund_amount} has been refunded to the user's wallet."
+                }, status=200)
+
             return JsonResponse({"message": "Return status updated successfully!"}, status=200)
+
         except ReturnRequest.DoesNotExist:
             return JsonResponse({"message": "Return request not found."}, status=404)
 
     return JsonResponse({"message": "Invalid request"}, status=400)
+
