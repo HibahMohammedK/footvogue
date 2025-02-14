@@ -32,7 +32,7 @@
                     </td>
                     <td>{{ item.color }}</td>
                     <td>{{ item.size }}</td>
-                    <td><strong>${{ item.price }}</strong></td>
+                    <td><strong>₹{{ item.price }}</strong></td>
                     <td>
                         <a href="{% url 'add_to_cart_from_wishlist' item.variant_id %}" class="btn btn-success btn-sm">
                             <i class="fas fa-shopping-cart"></i> Add to Cart

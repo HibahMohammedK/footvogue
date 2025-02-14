@@ -8,6 +8,13 @@
                 <div class="card-header bg-danger text-white">
                     <h4 class="title text-center m-0">Add Product</h4>
                 </div>
+                {% if messages %}
+                        <ul class="messages mt-3">
+                            {% for message in messages %}
+                            <p class="text-{% if message.tags %}{{ message.tags }}{% endif %}">{{ message }}</p>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
                 <div class="card-body">
                     <form method="POST" action="{% url 'add_product' %}" enctype="multipart/form-data">
                         {% csrf_token %}
@@ -80,13 +87,7 @@
                         <button type="submit" class="btn btn-success mt-4">Add Product</button>
                     </form>
 
-                    {% if messages %}
-                        <ul class="messages mt-3">
-                            {% for message in messages %}
-                            <p class="text-{% if message.tags %}{{ message.tags }}{% endif %}">{{ message }}</p>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
+                    
                 </div>
             </div>
         </div>

@@ -43,11 +43,11 @@
                     <div class="cart-item-details">
                         <h3>{{ item.product_name }}</h3>
                         <p>{{ item.color }} - {{ item.size }}</p>
-                        <p><del class="text-danger">${{ item.original_price }}</del> <span class="text-success">${{ item.discounted_price }}</span></p>
-                        <p>{{ item.quantity }} x ${{ item.discounted_price }}</p>
-                        <p>Total: ${{ item.total_price }}</p>
+                        <p><del class="text-danger">₹{{ item.original_price }}</del> <span class="text-success">₹{{ item.discounted_price }}</span></p>
+                        <p>{{ item.quantity }} x ₹{{ item.discounted_price }}</p>
+                        <p>Total: ₹{{ item.total_price }}</p>
                         {% if item.total_savings > 0 %}
-                            <p class="text-success">You saved: ${{ item.total_savings }}</p>
+                            <p class="text-success">You saved: ₹{{ item.total_savings }}</p>
                         {% endif %}
                     </div>
                     <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
