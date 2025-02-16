@@ -191,6 +191,8 @@ class Address(models.Model):
             Address.objects.filter(user=self.user).update(is_default=False)
         super(Address, self).save(*args, **kwargs)
 
+from decimal import Decimal
+from django.utils import timezone
 
 class Coupon(models.Model):
     DISCOUNT_TYPES = [
@@ -240,9 +242,23 @@ class Coupon(models.Model):
         
         return basic_validity
 
+    def calculate_discount(self, cart_total):
+        """Calculate the discount amount based on the coupon type."""
+        if self.discount_type == "percentage":
+            discount_amount = (Decimal(self.discount_value) / Decimal(100)) * cart_total
+            if self.max_discount:  # Apply max cap if set
+                discount_amount = min(discount_amount, self.max_discount)
+        elif self.discount_type == "fixed":
+            discount_amount = Decimal(self.discount_value)
+        else:
+            return Decimal(0)
+        
+        # Ensure discount does not exceed cart total
+        return min(discount_amount, cart_total)
+
     def __str__(self):
         return f"{self.coupon_code} ({self.get_discount_type_display()})"
-    
+
     
 class UserCouponUsage(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
@@ -252,6 +268,7 @@ class UserCouponUsage(models.Model):
 
     class Meta:
         unique_together = ('user', 'coupon', 'order')  # Prevent duplicate uses per order
+
 
 class Order(models.Model):
     STATUS_CHOICES = [

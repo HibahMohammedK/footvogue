@@ -63,11 +63,13 @@
                         <strong>Size:</strong> {{ item.size }}
                     </p>
                     <div class="cart-item-price">
-                        {% if item.discounted_price < item.original_price %}
-                            <p><del class="product-old-price">₹{{ item.original_price|floatformat:2 }}</del> <strong>₹{{ item.discounted_price|floatformat:2 }}</strong></p>
+                        {% if item.offer_price and item.offer_price < item.original_price %}
+                            <p><del class="product-old-price">₹{{ item.original_price|floatformat:2 }}</del> 
+                            <strong>₹{{ item.offer_price|floatformat:2 }}</strong></p>
                         {% else %}
                             <p>Price: ₹{{ item.original_price|floatformat:2 }}</p>
                         {% endif %}
+
                     
                         <form method="POST" action="{% url 'update_cart' item.id %}" class="update-cart-form">
                             {% csrf_token %}

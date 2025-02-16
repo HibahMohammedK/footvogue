@@ -1048,16 +1048,20 @@ def remove_from_cart(request, cart_item_id):
     cart_item.delete()
     messages.success(request, "Item removed from the cart.")
     return redirect('cart_view')
+
 @login_required
 def checkout(request):
     user = request.user
     cart_items = Cart.get_user_cart(user)
-    total_price = sum(item.get_discounted_total() for item in cart_items)
-    discount = request.session.get("discount", 0)  # Get discount from session if available
-    applied_coupon_code = request.session.get("applied_coupon", None)  # Get coupon from session
-    shipping_address = None
 
-    # Apply discount if a coupon is already stored in session
+    # ✅ Calculate the total price considering the offer price first
+    total_price = sum(item.get_discounted_total() for item in cart_items)
+
+    # ✅ Retrieve the coupon discount from session (if applied)
+    discount = float(request.session.get("discount", 0))
+    applied_coupon_code = request.session.get("applied_coupon", None)
+
+    # ✅ Recalculate discount if a coupon is stored in the session
     if applied_coupon_code:
         try:
             coupon = Coupon.objects.get(
@@ -1067,29 +1071,35 @@ def checkout(request):
             )
             if total_price >= coupon.min_purchase:
                 discount = coupon.calculate_discount(total_price)
+                request.session["discount"] = discount  # Update the session
             else:
-                # Remove invalid coupon from session
-                del request.session["applied_coupon"]
-                del request.session["discount"]
+                # ❌ Remove invalid coupon from session
+                request.session.pop("applied_coupon", None)
+                request.session.pop("discount", None)
                 messages.error(request, "Coupon no longer valid. Minimum purchase not met.")
+                discount = 0  # Reset discount
+
         except Coupon.DoesNotExist:
-            del request.session["applied_coupon"]
-            del request.session["discount"]
+            # ❌ Remove invalid coupon from session
+            request.session.pop("applied_coupon", None)
+            request.session.pop("discount", None)
             messages.error(request, "Invalid coupon code.")
+            discount = 0  # Reset discount
 
-    # Recalculate final price after discount
-    final_price = total_price - discount
-    total_price_paise = int(final_price * 100)  # Convert to paise for Razorpay
+    # ✅ Apply final discount
+    final_price = max(total_price - Decimal(discount), 0)   # Ensure no negative values
+    total_price_paise = int(final_price * 100)  # Convert to paise
 
-    # ✅ Move Razorpay order creation after discount application
+    # ✅ Create Razorpay order AFTER applying discount
     client = razorpay.Client(auth=(settings.RAZORPAY_API_KEY, settings.RAZORPAY_API_SECRET))
     razorpay_order = client.order.create({
-        'amount': total_price_paise,  # ✅ Now using the discounted price
+        'amount': total_price_paise,  
         'currency': 'INR',
         'payment_capture': '1',
     })
     razorpay_order_id = razorpay_order['id']
 
+    # ✅ Prepare cart data
     cart_data = [
         {
             'id': item.id,
@@ -1105,8 +1115,8 @@ def checkout(request):
         for item in cart_items
     ]
 
+    # ✅ Handle POST requests (coupon & address selection)
     if request.method == "POST":
-        # Handling Coupon Code
         if 'coupon_code' in request.POST:
             coupon_code = request.POST.get("coupon_code")
             try:
@@ -1120,15 +1130,14 @@ def checkout(request):
                 else:
                     discount = coupon.calculate_discount(total_price)
                     request.session["applied_coupon"] = coupon_code
-                    request.session["discount"] = float(discount)
+                    request.session["discount"] = discount  # ✅ Update session
                     applied_coupon_code = coupon_code
                     messages.success(request, f"Coupon applied! Discount: ₹{discount}")
 
-                    # ✅ Recalculate final price after applying the coupon
-                    final_price = total_price - discount
+                    # ✅ Update final price & Razorpay order
+                    final_price = max(total_price - discount, 0)
                     total_price_paise = int(final_price * 100)
 
-                    # ✅ Update Razorpay order with new discounted price
                     razorpay_order = client.order.create({
                         'amount': total_price_paise,  
                         'currency': 'INR',
@@ -1139,16 +1148,14 @@ def checkout(request):
             except Coupon.DoesNotExist:
                 messages.error(request, "Invalid coupon code")
 
-        # Handling Address Selection
+        # ✅ Handle address selection
         address_select = request.POST.get("address_select")
         if address_select:
-            try:
-                shipping_address = get_object_or_404(Address, id=address_select, user=user)
-                request.session["shipping_address_id"] = shipping_address.id
-                messages.success(request, "Shipping address selected successfully.")
-            except Address.DoesNotExist:
-                messages.error(request, "Invalid address selected.")
+            shipping_address = get_object_or_404(Address, id=address_select, user=user)
+            request.session["shipping_address_id"] = shipping_address.id
+            messages.success(request, "Shipping address selected successfully.")
         else:
+            # ✅ Save new address if entered
             address_form = AddressForm(request.POST)
             if address_form.is_valid():
                 new_address = address_form.save(commit=False)
@@ -1170,10 +1177,9 @@ def checkout(request):
                     "address_form": address_form,  
                 })
 
-    # Retrieve the selected shipping address
+    # ✅ Get the selected shipping address
     selected_address_id = request.session.get("shipping_address_id")
-    if selected_address_id:
-        shipping_address = Address.objects.get(id=selected_address_id, user=user)
+    shipping_address = Address.objects.filter(id=selected_address_id, user=user).first()
 
     return render(request, "user/checkout.html", {
         "cart_items": cart_data,
@@ -1186,36 +1192,51 @@ def checkout(request):
         "razorpay_order_id": razorpay_order_id,
         "address_form": AddressForm(),
     })
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.db import transaction
-import razorpay
-from django.conf import settings
 
-from .models import Cart, Order, OrderItem, Address, Coupon
 
 @login_required
 @transaction.atomic
 def place_order(request):
     user = request.user
-    cart_items = Cart.get_user_cart(user)
+    cart_items = Cart.objects.filter(user=user)
 
     if not cart_items.exists():
         messages.error(request, "Your cart is empty.")
         return redirect("checkout")
 
-    subtotal = sum(item.total_price() for item in cart_items)
-    total_discount = request.session.get("discount", 0)
-    final_price = subtotal - total_discount
-    applied_coupon_id = request.session.get("applied_coupon")
+    # ✅ Convert subtotal to Decimal for accuracy
+    subtotal = sum(Decimal(item.get_discounted_total()) for item in cart_items)
 
-    applied_coupon = None
-    if applied_coupon_id:
-        applied_coupon = Coupon.objects.filter(id=applied_coupon_id).first()
+    # ✅ Debug: Print all session keys
+    print("[DEBUG] Session keys:", request.session.keys())
+    applied_coupon_code = request.session.get("applied_coupon")
+    print("[DEBUG] Applied Coupon Code from Session:", applied_coupon_code)
+    
+    applied_coupon = Coupon.objects.filter(coupon_code=applied_coupon_code).first() if applied_coupon_code else None
+
+    # ✅ Initialize discount variables
+    total_discount = Decimal(0)
+    final_price = subtotal  # Start with subtotal before applying coupon
+
+    # ✅ Apply Coupon Discount Properly BEFORE payment processing
+    if applied_coupon:
+        if applied_coupon.discount_type == "percentage":
+            total_discount = applied_coupon.calculate_discount(subtotal) 
+        elif applied_coupon.discount_type == "fixed":
+            total_discount = Decimal(applied_coupon.discount_value)
+
+        # ✅ Ensure discount is not more than subtotal
+        total_discount = min(total_discount, subtotal)
+        final_price -= total_discount  # ✅ Use Decimal subtraction
+
+    # ✅ Store discount in session before proceeding to payment
+    request.session["final_price"] = str(final_price)  # Store as string to avoid Decimal session issues
+
+    print(f"Session Data Before Order AND PAYMENT: {request.session.items()}")
+    # ✅ Now print the values safely
+    print(f"Fetching Coupon -> Session Coupon Code: {applied_coupon_code}, Found Coupon: {applied_coupon}")
 
     if request.method == "POST":
-        print(request.POST)  # Debugging line to check POST data
         payment_method = request.POST.get("payment_method", "cod")
         shipping_address_id = request.session.get("shipping_address_id")
 
@@ -1225,8 +1246,10 @@ def place_order(request):
 
         shipping_address = get_object_or_404(Address, id=shipping_address_id, user=user)
 
-        # Handle different payment methods
+        # ✅ Use FINAL discounted price in Razorpay
         if payment_method == "razorpay":
+            final_price = Decimal(request.session.get("final_price", subtotal))  # Get from session
+
             razorpay_payment_id = request.POST.get("razorpay_payment_id")
             razorpay_order_id = request.POST.get("razorpay_order_id")
             razorpay_signature = request.POST.get("razorpay_signature")
@@ -1235,7 +1258,6 @@ def place_order(request):
                 messages.error(request, "Payment details missing. Please complete the payment.")
                 return redirect("checkout")
 
-            # Verify payment signature
             client = razorpay.Client(auth=(settings.RAZORPAY_API_KEY, settings.RAZORPAY_API_SECRET))
             try:
                 client.utility.verify_payment_signature({
@@ -1243,21 +1265,24 @@ def place_order(request):
                     'razorpay_payment_id': razorpay_payment_id,
                     'razorpay_signature': razorpay_signature
                 })
-                payment_status = 'Paid'
+                payment_status = "Paid"
             except razorpay.errors.SignatureVerificationError:
                 messages.error(request, "Payment verification failed. Please try again.")
                 return redirect("checkout")
         else:
-            # Cash on Delivery (COD)
-            payment_status = 'Pending'
+            payment_status = "Pending"  # ✅ Cash on Delivery (COD)
 
-        # ✅ Create order (without referral_code since it's not in the model)
+        print(f"Session Data Before Order AFTER PAYMENT: {request.session.items()}")
+
+        print(f"Creating Order -> Discount: {total_discount}, Final Price: {final_price}, Applied Coupon: {applied_coupon}")
+
+        # ✅ Ensure ORDER is created with discounted FINAL price
         order = Order.objects.create(
             user=user,
             shipping_address=shipping_address,
             subtotal=subtotal,
             discount=total_discount,
-            total_amount=final_price,
+            total_amount=final_price,  # ✅ Using the correct final price
             applied_coupon=applied_coupon,
             status="Processing" if payment_status == "Paid" else "Pending",
             payment_status=payment_status,
@@ -1265,21 +1290,26 @@ def place_order(request):
             razorpay_payment_id=razorpay_payment_id if payment_method == "razorpay" else None,
         )
 
-        # Create order items and reduce stock
+        # ✅ Create Order Items with Correct Prices
         for cart_item in cart_items:
             variant = cart_item.product_variant
+            discounted_price = variant.get_discounted_price()  # ✅ Use the correct discounted price
+            quantity = cart_item.quantity
+
             OrderItem.objects.create(
                 order=order,
                 product_variant=variant,
-                quantity=cart_item.quantity,
-                price=variant.get_discounted_price(),
+                quantity=quantity,
+                price=discounted_price,
             )
-            variant.stock_quantity -= cart_item.quantity
+
+            # ✅ Reduce stock
+            variant.stock_quantity -= quantity
             variant.save()
 
-        # Clear cart and session data
+        # ✅ Clear cart and session data AFTER order creation
         cart_items.delete()
-        for key in ["applied_coupon", "discount", "shipping_address_id"]:
+        for key in ["applied_coupon", "discount", "final_price", "shipping_address_id"]:
             request.session.pop(key, None)
 
         messages.success(request, "Order placed successfully!")
@@ -1304,6 +1334,9 @@ def order_summary(request, order_id):
         discounted_price = item.price  # Discounted price stored in OrderItem
         total_price = discounted_price * item.quantity
         total_savings = (original_price - discounted_price) * item.quantity  # Savings per item
+        total_savings_by_offers = sum(item['total_savings'] for item in order_data)
+        total_savings_with_coupon = total_savings_by_offers + float(order.discount)
+
         
         order_data.append({
             'product_name': item.product_variant.product.name,
@@ -1315,6 +1348,8 @@ def order_summary(request, order_id):
             'total_price': total_price,
             'total_savings': total_savings,
             'image_url': image.image_url.url if image else None,
+            "total_savings_with_coupon": total_savings_with_coupon,
+            "total_savings_by_offers": total_savings_by_offers,
         })
 
     applied_coupon = order.applied_coupon
@@ -1330,7 +1365,7 @@ def order_summary(request, order_id):
     })
 
 
-from decimal import Decimal
+
 
 @login_required
 def user_cancel_order(request, order_id):
@@ -1612,14 +1647,13 @@ def delete_coupon(request, coupon_id):
     coupon = get_object_or_404(Coupon, id=coupon_id)
     coupon.delete()  # Delete the coupon
     return redirect('coupon_list')  # Redirect to the coupon list page
-
-
 @require_http_methods(["POST"])
 def validate_coupon(request):
     try:
         data = json.loads(request.body)
         coupon_code = data.get("coupon_code")
-        order_total = float(data.get("order_total", 0))
+        print(f"Coupon validation triggered for: {coupon_code}")
+        order_total = Decimal(data.get("order_total", 0))  # Convert to Decimal for consistency
 
         coupon = Coupon.objects.get(
             coupon_code=coupon_code,
@@ -1630,33 +1664,51 @@ def validate_coupon(request):
         # Check temporary usage
         temp_usage = request.session.get('temp_coupon_usage', {})
         temp_count = temp_usage.get(coupon_code, 0)
-        
+
         if (coupon.used_count + temp_count) >= coupon.usage_limit:
             return JsonResponse({"error": "Coupon usage limit reached"}, status=400)
 
-        if order_total < coupon.min_purchase:
+        if order_total < Decimal(coupon.min_purchase):
             return JsonResponse({"error": f"Minimum purchase of ₹{coupon.min_purchase} required"}, status=400)
 
         # Calculate actual discount
         if coupon.discount_type == "fixed":
-            discount = min(coupon.discount_value, order_total)
+            discount = min(Decimal(coupon.discount_value), order_total)
         elif coupon.discount_type == "percentage":
-            discount = (coupon.discount_value / 100) * order_total
+            discount = (Decimal(coupon.discount_value) / Decimal(100)) * order_total
             if coupon.max_discount:
-                discount = min(discount, coupon.max_discount)
+                discount = min(discount, Decimal(coupon.max_discount))
+
+        # ✅ Convert `discount` to float before subtraction to prevent type errors
+        discount_float = float(discount)
+        new_total = float(order_total) - discount_float  # Ensure both are floats
+
+        # ✅ Save coupon code and discount to session
+        request.session["applied_coupon"] = coupon_code  # Store applied coupon
+        request.session["discount"] = str(discount) # Ensure it's saved as a string
+        request.session["final_price"] = str(new_total)  # Save new total after discount
+        request.session.modified = True  # Ensure session updates are saved
+
+        # ✅ Generate a new Razorpay order with updated amount
+        client = razorpay.Client(auth=(settings.RAZORPAY_API_KEY, settings.RAZORPAY_API_SECRET))
+        razorpay_order = client.order.create({
+            "amount": int(new_total * 100),  # Razorpay expects amount in paise
+            "currency": "INR",
+            "payment_capture": 1  # Auto-capture payment
+        })
+        new_razorpay_order_id = razorpay_order["id"]
 
         return JsonResponse({
             "message": "Coupon valid",
-            "discount": discount,
-            "coupon_code": coupon_code
+            "discount": discount_float,  # ✅ Send discount as float
+            "coupon_code": coupon_code,
+            "razorpay_order_id": new_razorpay_order_id,  # ✅ Updated order ID
         })
 
     except Coupon.DoesNotExist:
         return JsonResponse({"error": "Invalid coupon"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
-
-
 
 def sales_report(request):
     """Handles sales report filtering and downloading."""
