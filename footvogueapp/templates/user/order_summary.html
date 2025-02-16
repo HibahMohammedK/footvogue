@@ -1,5 +1,6 @@
 {% extends "user/home.html" %}
 {% load static %}
+{% load math_filters %}
 {% block content %}
 <div class="container">
     <div class="order-summary-wrapper text-center">
@@ -43,12 +44,47 @@
                     <div class="cart-item-details">
                         <h3>{{ item.product_name }}</h3>
                         <p>{{ item.color }} - {{ item.size }}</p>
-                        <p><del class="text-danger">₹{{ item.original_price }}</del> <span class="text-success">₹{{ item.discounted_price }}</span></p>
+                        <!-- Order Items Section -->
+                        {% for item in order_items %}
+                        <div class="order-item">
+                        <p><del class="text-danger">₹{{ item.original_price }}</del> 
+                            <span class="text-success">₹{{ item.discounted_price }}</span></p>
                         <p>{{ item.quantity }} x ₹{{ item.discounted_price }}</p>
                         <p>Total: ₹{{ item.total_price }}</p>
                         {% if item.total_savings > 0 %}
-                            <p class="text-success">You saved: ₹{{ item.total_savings }}</p>
+                            <p class="text-success">Item Savings: ₹{{ item.total_savings }}</p>
                         {% endif %}
+                        </div>
+                        {% endfor %}
+
+                        <!-- Order-level Discounts -->
+                        <div class="order-totals">
+                        <p>Subtotal: ₹{{ order.subtotal }}</p>
+
+                        {% if order.applied_coupon %}
+                        <div class="coupon-discount">
+                            <p>Coupon Applied: <strong>{{ order.applied_coupon.coupon_code }}</strong></p>
+                            <p class="text-success">
+                            Coupon Discount ({{ order.applied_coupon.get_discount_type_display }}): 
+                            -₹{{ order.discount }}
+                            </p>
+                        </div>
+                        {% endif %}
+
+                        <!-- Total Savings Calculation -->
+                        <div class="total-savings">
+                        {% with total_savings=order.subtotal|sub:order.total_amount %}
+                            <p class="text-success fs-5">
+                            Total Savings: ₹{{ total_savings|floatformat:2 }}
+                            {% if order.applied_coupon %}
+                                (Includes ₹{{ order.subtotal|sub:order.total_amount|sub:order.discount|floatformat:2 }} from offers + ₹{{ order.discount }} from coupon)
+                            {% endif %}
+                            </p>
+                        {% endwith %}
+                        </div>
+
+                        <p class="total-amount">Grand Total: ₹{{ order.total_amount }}</p>
+                        </div>
                     </div>
                     <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
                 </div>

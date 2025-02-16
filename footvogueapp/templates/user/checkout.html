@@ -121,19 +121,22 @@
                         <div><strong>Subtotal</strong></div>
                         <div><strong id="subtotal">₹{{ total_price|floatformat:2 }}</strong></div>
                     </div>
-
+            
                     <div class="order-col" id="discount-row" style="display: none;">
                         <div>Coupon Discount</div>
-                        <div><strong id="discount-amount">-₹{{ discount|floatformat:2 }}</strong></div>
+                        <div><strong id="discount-amount">-₹0.00</strong></div>
                     </div>
-
+            
                     <div class="order-col">
                         <div><strong>TOTAL</strong></div>
                         <div><strong class="order-total" id="final-total">₹{{ total_price|floatformat:2 }}</strong></div>
                     </div>
                 </div>
-
+            
+                <!-- Hidden input fields to store discount and final price -->
                 <input type="hidden" id="discount_value" name="discount_value" value="0">
+                <input type="hidden" id="final_price" name="final_price" value="{{ total_price|floatformat:2 }}">
+            
                 <form id="checkout-form" method="POST" action="{% url 'place_order' %}">
                     {% csrf_token %}
                     
@@ -150,16 +153,21 @@
                     <!-- Razorpay Payment Button (Initially Hidden) -->
                     <button id="razorpay-button" class="btn btn-primary" style="display: none;">Pay with Razorpay</button>
                 
-                    <!-- Hidden Form to Submit Razorpay Payment Details -->
+                    <!-- Hidden Form Inputs -->
                     <input type="hidden" id="razorpay_payment_id" name="razorpay_payment_id">
                     <input type="hidden" id="razorpay_order_id" name="razorpay_order_id" value="{{ razorpay_order_id }}">
                     <input type="hidden" id="razorpay_signature" name="razorpay_signature">
                 
+                    <!-- ✅ Hidden input for discount -->
+                    <input type="hidden" id="discount_amount_input" name="discount" value="0">
+                    
+                    <!-- ✅ Hidden input for final price after discount -->
+                    <input type="hidden" id="final_price" name="final_price" value="{{ total_price }}">
+                
                     <button type="submit" class="primary-btn order-submit">Place Order</button>
                 </form>
                 
-                
-            </div>
+            </div>            
         </div>
     </div>
 </div>
@@ -193,18 +201,9 @@
             document.getElementById("country").value = selectedOption.getAttribute("data-country");
         }
     }
-
     function applyCoupon() {
         let couponCode = document.getElementById("coupon_code").value;
-        let orderTotal = parseFloat("{{ total_price }}");  // Fetch from template context
-
-        if (!couponCode) {
-            let messageBox = document.getElementById("coupon_message");
-            messageBox.textContent = "Please enter a coupon code.";
-            messageBox.style.color = "red";
-            messageBox.style.display = "block";
-            return;
-        }
+        let orderTotal = parseFloat("{{ total_price }}");
 
         fetch("{% url 'validate_coupon' %}", {
             method: "POST",
@@ -226,19 +225,31 @@
                 let discount = parseFloat(data.discount);
                 let newTotal = orderTotal - discount;
 
+                // ✅ Update discount and final total display
                 document.getElementById("discount-amount").textContent = "-₹" + discount.toFixed(2);
                 document.getElementById("final-total").textContent = "₹" + newTotal.toFixed(2);
-                document.getElementById("discount-row").style.display = "flex";  // Show discount row
+                document.getElementById("discount-row").style.display = "flex";
 
+                // ✅ Update hidden input fields
+                document.getElementById("discount_amount_input").value = discount;
+                document.getElementById("final_price").value = newTotal.toFixed(2);
+
+                // ✅ Update success message
                 messageBox.textContent = "Coupon applied successfully!";
                 messageBox.style.color = "green";
                 messageBox.style.display = "block";
+
+                // ✅ Update Razorpay order ID and amount
+                document.getElementById("razorpay_order_id").value = data.razorpay_order_id;
+                options.amount = newTotal * 100;  // Convert to paise
             }
         })
         .catch(error => {
             console.error("Error:", error);
         });
     }
+
+
         
   
 document.addEventListener("DOMContentLoaded", function() {
@@ -261,12 +272,11 @@ document.addEventListener("DOMContentLoaded", function() {
         e.preventDefault();
 
         var options = {
-            "key": "{{ razorpay_key_id }}", // Razorpay API Key from Django view
-            "amount": "{{ final_price|floatformat:2 }}" * 100, // Convert to paise
+            "key": "{{ razorpay_key_id }}",
+            "amount": document.getElementById("final_price").value * 100, // Use updated value
             "currency": "INR",
             "name": "Foot Vogue",
-            "description": "Order Payment",
-            "order_id": "{{ razorpay_order_id }}", // Generated in Django view
+            "order_id": document.getElementById("razorpay_order_id").value, // Updated order ID
             "handler": function(response) {
                 // Set hidden fields with payment details
                 document.getElementById("razorpay_payment_id").value = response.razorpay_payment_id;
