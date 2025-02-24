@@ -1219,64 +1219,81 @@ def place_order(request):
         messages.error(request, "Your cart is empty.")
         return redirect("checkout")
 
-    # ✅ Calculate original subtotal (before any discounts)
-    subtotal = sum(
+    # --- Price Calculations ---
+    # Original subtotal: price before any offers
+    original_subtotal = sum(
         Decimal(item.product_variant.price) * item.quantity 
         for item in cart_items
     )
-    
+    # Offer subtotal: sum of discounted prices (offer price) for each cart item
+    offer_subtotal = sum(item.get_discounted_total() for item in cart_items)
+    # Offer discount: savings from product/category offers
+    offer_discount = original_subtotal - offer_subtotal
 
-    # ✅ Debug: Print all session keys
-    print("[DEBUG] Session keys:", request.session.keys())
+    # Initialize coupon discount to zero
+    coupon_discount = Decimal(0)
     applied_coupon_code = request.session.get("applied_coupon")
-    print("[DEBUG] Applied Coupon Code from Session:", applied_coupon_code)
-    
-    applied_coupon = Coupon.objects.filter(coupon_code=applied_coupon_code).first() if applied_coupon_code else None
+    applied_coupon = None
+    if applied_coupon_code:
+        try:
+            applied_coupon = Coupon.objects.get(
+                coupon_code=applied_coupon_code,
+                is_active=True,
+                expiration_date__gt=timezone.now()
+            )
+            # Check if offer_subtotal meets minimum purchase requirement
+            if offer_subtotal >= applied_coupon.min_purchase:
+                if applied_coupon.discount_type == "percentage":
+                    coupon_discount = (applied_coupon.discount_value / 100) * offer_subtotal
+                else:
+                    coupon_discount = Decimal(applied_coupon.discount_value)
+                # Ensure coupon discount does not exceed offer_subtotal
+                coupon_discount = min(coupon_discount, offer_subtotal)
+            else:
+                # Clear invalid coupon if minimum purchase not met
+                request.session.pop("applied_coupon", None)
+                request.session.pop("discount", None)
+                messages.error(request, "Coupon minimum purchase not met")
+                coupon_discount = Decimal(0)
+        except Coupon.DoesNotExist:
+            request.session.pop("applied_coupon", None)
+            request.session.pop("discount", None)
+            messages.error(request, "Invalid coupon code")
+            coupon_discount = Decimal(0)
 
-    # ✅ Initialize discount variables
-    total_discount = Decimal(0)
-    final_price = subtotal - total_discount  # Start with subtotal before applying coupon
+    # Total discount is the sum of offer discount and coupon discount
+    total_discount = offer_discount + coupon_discount
+    # Final amount is what the user pays: original_subtotal - total_discount
+    final_amount = original_subtotal - total_discount
 
-    # ✅ Apply Coupon Discount Properly BEFORE payment processing
-    if applied_coupon:
-        if applied_coupon.discount_type == "percentage":
-            total_discount = applied_coupon.calculate_discount(subtotal) 
-        elif applied_coupon.discount_type == "fixed":
-            total_discount = Decimal(applied_coupon.discount_value)
+    # Store the final amount in session (as string) to avoid Decimal issues later
+    request.session["final_price"] = str(final_amount)
 
-        # ✅ Ensure discount is not more than subtotal
-        total_discount = min(total_discount, subtotal)
-        final_price -= total_discount  # ✅ Use Decimal subtraction
-
-    # ✅ Store discount in session before proceeding to payment
-    request.session["final_price"] = str(final_price)  # Store as string to avoid Decimal session issues
-
-    print(f"Session Data Before Order AND PAYMENT: {request.session.items()}")
-    # ✅ Now print the values safely
-    print(f"Fetching Coupon -> Session Coupon Code: {applied_coupon_code}, Found Coupon: {applied_coupon}")
+    # --- Debug prints ---
+    print(f"[DEBUG] Session keys: {list(request.session.keys())}")
+    print(f"[DEBUG] Applied Coupon Code from Session: {applied_coupon_code}")
+    print(f"Original Subtotal: {original_subtotal}, Offer Subtotal: {offer_subtotal}")
+    print(f"Offer Discount: {offer_discount}, Coupon Discount: {coupon_discount}")
+    print(f"Total Discount: {total_discount}, Final Amount: {final_amount}")
 
     if request.method == "POST":
         payment_method = request.POST.get("payment_method", "cod")
         shipping_address_id = request.session.get("shipping_address_id")
-
         if not shipping_address_id:
             messages.error(request, "Please select a shipping address.")
             return redirect("checkout")
-
         shipping_address = get_object_or_404(Address, id=shipping_address_id, user=user)
 
-        # ✅ Use FINAL discounted price in Razorpay
+        # Process Razorpay Payment if selected
         if payment_method == "razorpay":
-            final_price = Decimal(request.session.get("final_price", subtotal))  # Get from session
-
+            # Retrieve the final amount from session
+            final_amount = Decimal(request.session.get("final_price", original_subtotal))
             razorpay_payment_id = request.POST.get("razorpay_payment_id")
             razorpay_order_id = request.POST.get("razorpay_order_id")
             razorpay_signature = request.POST.get("razorpay_signature")
-
             if not razorpay_payment_id or not razorpay_order_id or not razorpay_signature:
                 messages.error(request, "Payment details missing. Please complete the payment.")
                 return redirect("checkout")
-
             client = razorpay.Client(auth=(settings.RAZORPAY_API_KEY, settings.RAZORPAY_API_SECRET))
             try:
                 client.utility.verify_payment_signature({
@@ -1289,19 +1306,18 @@ def place_order(request):
                 messages.error(request, "Payment verification failed. Please try again.")
                 return redirect("checkout")
         else:
-            payment_status = "Pending"  # ✅ Cash on Delivery (COD)
+            payment_status = "Pending"  # For Cash on Delivery
 
-        print(f"Session Data Before Order AFTER PAYMENT: {request.session.items()}")
+        print(f"[DEBUG] Session Data Before Order AFTER PAYMENT: {dict(request.session.items())}")
+        print(f"Creating Order -> Total Discount: {total_discount}, Final Amount: {final_amount}, Applied Coupon: {applied_coupon}")
 
-        print(f"Creating Order -> Discount: {total_discount}, Final Price: {final_price}, Applied Coupon: {applied_coupon}")
-
-        # ✅ Ensure ORDER is created with discounted FINAL price
+        # Create the Order with correct values
         order = Order.objects.create(
             user=user,
             shipping_address=shipping_address,
-            subtotal=subtotal,
+            subtotal=original_subtotal,
             discount=total_discount,
-            total_amount=final_price,  # ✅ Using the correct final price
+            total_amount=final_amount,
             applied_coupon=applied_coupon,
             status="Processing" if payment_status == "Paid" else "Pending",
             payment_status=payment_status,
@@ -1309,24 +1325,21 @@ def place_order(request):
             razorpay_payment_id=razorpay_payment_id if payment_method == "razorpay" else None,
         )
 
-        # ✅ Create Order Items with Correct Prices
+        # Create Order Items and reduce stock
         for cart_item in cart_items:
             variant = cart_item.product_variant
-            discounted_price = variant.get_discounted_price()  # ✅ Use the correct discounted price
+            discounted_price = variant.get_discounted_price()  # Offer price per item
             quantity = cart_item.quantity
-
             OrderItem.objects.create(
                 order=order,
                 product_variant=variant,
                 quantity=quantity,
                 price=discounted_price,
             )
-
-            # ✅ Reduce stock
             variant.stock_quantity -= quantity
             variant.save()
 
-        # ✅ Clear cart and session data AFTER order creation
+        # Clear cart and session data AFTER order creation
         cart_items.delete()
         for key in ["applied_coupon", "discount", "final_price", "shipping_address_id"]:
             request.session.pop(key, None)
@@ -1334,11 +1347,12 @@ def place_order(request):
         messages.success(request, "Order placed successfully!")
         return redirect("order_summary", order_id=order.id)
 
+    # GET request: render place_order page with summary data
     return render(request, "user/place_order.html", {
         "cart_items": cart_items,
-        "subtotal": subtotal,
+        "subtotal": original_subtotal,
         "total_discount": total_discount,
-        "final_price": final_price,
+        "final_price": final_amount,
     })
 
 @login_required
