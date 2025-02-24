@@ -7,12 +7,16 @@ from decimal import Decimal
 @receiver(post_save, sender=Order)
 def handle_referral_reward(sender, instance, created, **kwargs):
     if created:
-        # ✅ Safely check if the user has a referral
         referral = getattr(instance.user, "referral", None)
 
-        if referral:  # Only proceed if the user has a referral
-            referrer = referral.referrer  # ✅ Get the referrer
-            referred_user = instance.user  # ✅ Get the referred user
+        if referral:  
+            referrer = referral.referrer  
+            referred_user = instance.user  
+
+            # ✅ Ensure reward is only given for the first order
+            previous_orders = Order.objects.filter(user=referred_user).exclude(id=instance.id).exists()
+            if previous_orders:  
+                return  # Exit without giving rewards if this is not the first order
 
             # Find an active referral offer
             referral_offer = ReferralOffer.objects.filter(
@@ -20,7 +24,7 @@ def handle_referral_reward(sender, instance, created, **kwargs):
             ).first()
 
             if referral_offer:
-                reward_amount = Decimal(str(referral_offer.reward_amount))  # ✅ Ensure it's a Decimal
+                reward_amount = Decimal(str(referral_offer.reward_amount))  
 
                 # ✅ Reward the referrer
                 referrer_wallet, _ = Wallet.objects.get_or_create(user=referrer)
