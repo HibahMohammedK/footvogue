@@ -87,6 +87,8 @@
                         </div>
                     </div>
                     <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
+                    <a href="{% url 'download_invoice' order_id=order.id %}" class="btn btn-secondary">Download Invoice</a>
+
                 </div>
                 {% endfor %}
             </ul>

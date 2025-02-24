@@ -17,6 +17,7 @@ urlpatterns = [
     path('product/<int:product_id>/', views.product_details, name='product_details'),
     path('product/<int:product_id>/variant/<int:variant_id>/', views.product_details, name='product_details_variant'),
     path('product/<int:product_id>/submit_review_and_rating/', views.submit_review_and_rating, name='submit_review_and_rating'),
+    path('get-top-products/', views.get_top_products, name='get_top_products'),
 
     ### admin urls ####
 
@@ -66,7 +67,7 @@ urlpatterns = [
     path("request-return/<int:order_item_id>/", views.request_return, name="request_return"),
     path("user-returns/", views.user_return_requests, name="user_returns"),
     path("returns/", views.admin_return_requests, name="admin_returns"),
-     path('update-return-status/', views.update_return_status, name='update_return_status'),
+    path('update-return-status/', views.update_return_status, name='update_return_status'),
 
 
    # Offer Management URLs
@@ -85,6 +86,7 @@ urlpatterns = [
 
     path('sales_report/', views.sales_report, name='sales_report'),
     path('sales_report/download/<str:report_type>/',views.download_sales_report, name='download_sales_report'),
+    path('download_invoice/<int:order_id>/', views.download_invoice, name='download_invoice'),
 
     path('wishlist/', views.wishlist_view, name='wishlist_view'),
     path('wishlist/add/<int:variant_id>/', views.add_to_wishlist, name='add_to_wishlist'),

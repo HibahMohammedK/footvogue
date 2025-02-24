@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required , user_passes_test
 from .forms import ReviewForm, RatingForm
 from django.core.paginator import Paginator
 from django.db.models import Avg, Sum, Count
-from .utils import generate_and_send_otp 
+from .utils import generate_and_send_otp, get_sales_analytics
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.contrib.auth.forms import PasswordChangeForm
@@ -32,7 +32,10 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from datetime import timezone as dt_timezone
-
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from django.db.models.functions import TruncDay
+from reportlab.lib.styles import getSampleStyleSheet
+from django.template.loader import render_to_string
    
 
 @never_cache
@@ -76,6 +79,17 @@ def home(request):
     # Render the home template with products and rating range
     return render(request, 'user/home.html', context)
 
+
+def get_top_products(request):
+    selected_category = request.GET.get('category')
+
+    # Fetch top-selling products (same logic as the home view)
+    top_products, _ = get_sales_analytics(category_id=selected_category)
+
+    # Render the products HTML
+    products_html = render_to_string('user/product_list.html', {'top_products': top_products})
+
+    return JsonResponse({'products_html': products_html})
 
 def search_results(request):
     category_id = request.GET.get("category", "0")
@@ -1053,12 +1067,13 @@ def remove_from_cart(request, cart_item_id):
 def checkout(request):
     user = request.user
     cart_items = Cart.get_user_cart(user)
+    
 
     # ✅ Calculate the total price considering the offer price first
     total_price = sum(item.get_discounted_total() for item in cart_items)
 
     # ✅ Retrieve the coupon discount from session (if applied)
-    discount = float(request.session.get("discount", 0))
+    discount = Decimal(request.session.get("discount", 0))  # Get as Decimal
     applied_coupon_code = request.session.get("applied_coupon", None)
 
     # ✅ Recalculate discount if a coupon is stored in the session
@@ -1071,23 +1086,23 @@ def checkout(request):
             )
             if total_price >= coupon.min_purchase:
                 discount = coupon.calculate_discount(total_price)
-                request.session["discount"] = discount  # Update the session
+                request.session["discount"] = float(discount)  # Store as float
             else:
                 # ❌ Remove invalid coupon from session
                 request.session.pop("applied_coupon", None)
                 request.session.pop("discount", None)
                 messages.error(request, "Coupon no longer valid. Minimum purchase not met.")
-                discount = 0  # Reset discount
+                discount = Decimal(0)  # Reset discount
 
         except Coupon.DoesNotExist:
             # ❌ Remove invalid coupon from session
             request.session.pop("applied_coupon", None)
             request.session.pop("discount", None)
             messages.error(request, "Invalid coupon code.")
-            discount = 0  # Reset discount
+            discount = Decimal(0)  # Reset discount
 
     # ✅ Apply final discount
-    final_price = max(total_price - Decimal(discount), 0)   # Ensure no negative values
+    final_price = max(total_price - discount, Decimal(0))  # Use Decimal directly
     total_price_paise = int(final_price * 100)  # Convert to paise
 
     # ✅ Create Razorpay order AFTER applying discount
@@ -1204,8 +1219,12 @@ def place_order(request):
         messages.error(request, "Your cart is empty.")
         return redirect("checkout")
 
-    # ✅ Convert subtotal to Decimal for accuracy
-    subtotal = sum(Decimal(item.get_discounted_total()) for item in cart_items)
+    # ✅ Calculate original subtotal (before any discounts)
+    subtotal = sum(
+        Decimal(item.product_variant.price) * item.quantity 
+        for item in cart_items
+    )
+    
 
     # ✅ Debug: Print all session keys
     print("[DEBUG] Session keys:", request.session.keys())
@@ -1216,7 +1235,7 @@ def place_order(request):
 
     # ✅ Initialize discount variables
     total_discount = Decimal(0)
-    final_price = subtotal  # Start with subtotal before applying coupon
+    final_price = subtotal - total_discount  # Start with subtotal before applying coupon
 
     # ✅ Apply Coupon Discount Properly BEFORE payment processing
     if applied_coupon:
@@ -1330,14 +1349,16 @@ def order_summary(request, order_id):
     order_data = []
     for item in order_items:
         image = item.product_variant.productimage_set.first()
-        original_price = item.product_variant.price  # Original price
-        discounted_price = item.price  # Discounted price stored in OrderItem
+        original_price = item.product_variant.price  # This is a Decimal
+        discounted_price = item.price                # Also a Decimal
         total_price = discounted_price * item.quantity
-        total_savings = (original_price - discounted_price) * item.quantity  # Savings per item
-        total_savings_by_offers = sum(item['total_savings'] for item in order_data)
-        total_savings_with_coupon = total_savings_by_offers + float(order.discount)
+        total_savings = (original_price - discounted_price) * item.quantity
 
-        
+        # Calculate total savings by offers so far as a Decimal:
+        total_savings_by_offers = sum((x['total_savings'] for x in order_data), Decimal(0))
+        # Now add the coupon discount (which is a Decimal) without converting to float:
+        total_savings_with_coupon = total_savings_by_offers + order.discount
+
         order_data.append({
             'product_name': item.product_variant.product.name,
             'color': item.product_variant.color.color_name,
@@ -1709,46 +1730,67 @@ def validate_coupon(request):
         return JsonResponse({"error": "Invalid coupon"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
-
+  
 def sales_report(request):
     """Handles sales report filtering and downloading."""
     filter_type = request.GET.get('filter', 'daily')
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
-    # Ensure timezone awareness
     today = timezone.now().date()
 
     if filter_type == "daily":
         start_date = end_date = today
+        truncate_by = 'day'
     elif filter_type == "weekly":
         start_date = today - datetime.timedelta(days=7)
         end_date = today
+        truncate_by = 'day'
     elif filter_type == "monthly":
         start_date = today.replace(day=1)
         end_date = today
+        truncate_by = 'day'
+    elif filter_type == "yearly":
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+        truncate_by = 'month'
     elif filter_type == "custom" and start_date and end_date:
         start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+        truncate_by = 'day'
     else:
         start_date = end_date = today
+        truncate_by = 'day'
 
     # Filter orders based on date range
     orders = Order.objects.filter(order_date__date__range=[start_date, end_date])
 
-    # Aggregated values
-    total_orders = orders.count()
-    total_sales = orders.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    total_discount = orders.aggregate(Sum('discount'))['discount__sum'] or 0
+    # Aggregate data for the chart
+    sales_data = (
+        orders.annotate(date=TruncDay('order_date'))
+        .values('date')
+        .annotate(total_sales=Sum('total_amount'))
+        .order_by('date')
+    )
+
+    # Convert data to JSON format for Chart.js
+    sales_chart_labels = [entry["date"].strftime("%Y-%m-%d") for entry in sales_data]
+    sales_chart_values = [float(entry["total_sales"]) for entry in sales_data]  # Convert Decimal to float
+
+    top_products, top_categories = get_sales_analytics()
 
     context = {
         'orders': orders,
-        'total_orders': total_orders,
-        'total_sales': total_sales,
-        'total_discount': total_discount,
+        'total_orders': orders.count(),
+        'total_sales': float(orders.aggregate(Sum('total_amount'))['total_amount__sum'] or 0),  # Convert Decimal to float
+        'total_discount': float(orders.aggregate(Sum('discount'))['discount__sum'] or 0),  # Convert Decimal to float
         'filter_type': filter_type,
         'start_date': start_date,
-        'end_date': end_date
+        'end_date': end_date,
+        'sales_chart_labels': json.dumps(sales_chart_labels),
+        'sales_chart_values': json.dumps(sales_chart_values),
+        'top_products': top_products,
+        'top_categories': top_categories,
     }
 
     return render(request, 'admin/sales_report.html', context)
@@ -1769,6 +1811,9 @@ def download_sales_report(request, report_type):
             end_date = today
         elif filter_type == "monthly":
             start_date = today.replace(day=1)
+            end_date = today
+        elif filter_type == "yearly":
+            start_date = today.replace(month=1, day=1)
             end_date = today
         elif filter_type == "custom" and start_date and end_date:
             start_date = parser.parse(start_date).date()
@@ -1819,7 +1864,6 @@ def download_sales_report(request, report_type):
                 })
 
             df = pd.DataFrame(data)
-
         else:
             df = pd.DataFrame(columns=["ID", "Order Date", "Total Amount", "Discount"])
 
@@ -1829,7 +1873,6 @@ def download_sales_report(request, report_type):
         return response
 
     return JsonResponse({"error": "Invalid report type"}, status=400)
-
 
 @login_required
 def wishlist_view(request):
@@ -2031,3 +2074,86 @@ def update_return_status(request):
 
     return JsonResponse({"message": "Invalid request"}, status=400)
 
+
+def download_invoice(request, order_id):
+    """
+    Generate and download an invoice PDF for a given order.
+    """
+    # Retrieve the order (adjust as per your model)
+    order = get_object_or_404(Order, id=order_id)
+    order_items = order.items.all()  # Using the related name "items" from OrderItem
+
+    # Create the HttpResponse with PDF headers.
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="invoice_{order.id}.pdf"'
+
+    # Create a PDF document using SimpleDocTemplate
+    doc = SimpleDocTemplate(response, pagesize=letter)
+    elements = []
+    
+    # Get a set of styles to use for text
+    styles = getSampleStyleSheet()
+    title_style = styles['Title']
+    normal_style = styles['Normal']
+    heading_style = styles['Heading2']
+    
+    # Invoice Title and Order Summary
+    elements.append(Paragraph("Invoice", title_style))
+    elements.append(Spacer(1, 12))
+    elements.append(Paragraph(f"<b>Order ID:</b> {order.id}", normal_style))
+    elements.append(Paragraph(f"<b>Status:</b> {order.status}", normal_style))
+    elements.append(Spacer(1, 12))
+    
+    # Shipping Address
+    elements.append(Paragraph("Shipping Address:", heading_style))
+    shipping = order.shipping_address
+    shipping_text = (
+        f"{shipping.address_line1}<br/>"
+        f"{shipping.city}, {shipping.state} {shipping.postal_code}<br/>"
+        f"{shipping.country}"
+    )
+    elements.append(Paragraph(shipping_text, normal_style))
+    elements.append(Spacer(1, 12))
+    
+    # Order Items Table
+    data = [["Product", "Color", "Size", "Unit Price", "Quantity", "Total"]]
+    for item in order_items:
+        # Retrieve the discounted price from the product variant
+        unit_price = item.product_variant.get_discounted_price()
+        total_price = unit_price * item.quantity
+        
+        # With the __str__ method defined, these will show the correct values.
+        color = item.product_variant.color
+        size = item.product_variant.size
+        
+        data.append([
+            item.product_variant.product.name,
+            str(color), 
+            str(size),   
+            f"₹{unit_price}",
+            item.quantity,
+            f"₹{total_price}"
+        ])
+    
+    table = Table(data, hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 12))
+    
+    # Order Totals (subtotal, coupon info if any, grand total)
+    elements.append(Paragraph(f"<b>Subtotal:</b> ₹{order.subtotal}", normal_style))
+    if hasattr(order, 'applied_coupon') and order.applied_coupon:
+        elements.append(Paragraph(f"<b>Coupon Applied:</b> {order.applied_coupon.coupon_code}", normal_style))
+    elements.append(Paragraph(f"<b>Grand Total:</b> ₹{order.total_amount}", normal_style))
+    
+    # Build PDF
+    doc.build(elements)
+    return response

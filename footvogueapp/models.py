@@ -134,16 +134,26 @@ class ProductVariant(models.Model):
             return discounted_price  # Return discounted price
 
         return original_price  # Return original price if no offer
+    
+    def get_first_image_url(self):
+        image = self.productimage_set.first()
+        return image.image_url.url if image else None
 
 class ProductColor(models.Model):
     color_name = models.CharField(max_length=50)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return self.color_name
+
 class ProductSize(models.Model):
     size_name = models.CharField(max_length=50)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.size_name
 
 
 class Review(models.Model):

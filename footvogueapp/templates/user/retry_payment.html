@@ -1,0 +1,36 @@
+{% extends "user/home.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+    <h2>Retry Payment for Order #{{ order.id }}</h2>
+    <p class="lead">Total Amount: ₹{{ order.total_amount|floatformat:2 }}</p>
+
+    <button id="retry-payment-btn" class="btn btn-primary">Retry Payment Now</button>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+        document.getElementById('retry-payment-btn').onclick = function(e) {
+            const options = {
+                "key": "{{ razorpay_key_id }}",
+                "amount": "{{ amount }}",
+                "currency": "INR",
+                "name": "Your Store Name",
+                "order_id": "{{ order.razorpay_order_id }}",
+                "handler": function(response) {
+                    window.location.href = "{% url 'handle_payment' %}?" + 
+                        `razorpay_payment_id=${response.razorpay_payment_id}&` +
+                        `razorpay_order_id=${response.razorpay_order_id}&` +
+                        `razorpay_signature=${response.razorpay_signature}`;
+                },
+                "theme": {
+                    "color": "#3399cc"
+                }
+            };
+            
+            const rzp = new Razorpay(options);
+            rzp.open();
+        };
+    </script>
+</div>
+{% endblock %}

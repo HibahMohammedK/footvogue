@@ -201,6 +201,7 @@
             document.getElementById("country").value = selectedOption.getAttribute("data-country");
         }
     }
+    
     function applyCoupon() {
         let couponCode = document.getElementById("coupon_code").value;
         let orderTotal = parseFloat("{{ total_price }}");
