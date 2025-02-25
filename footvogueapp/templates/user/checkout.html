@@ -136,6 +136,18 @@
                 <!-- Hidden input fields to store discount and final price -->
                 <input type="hidden" id="discount_value" name="discount_value" value="0">
                 <input type="hidden" id="final_price" name="final_price" value="{{ total_price|floatformat:2 }}">
+
+                <!-- Hidden Modal for Payment Failure -->
+                <div id="payment-failed-modal" class="modal">
+                    <div class="modal-content">
+                        <span class="close" onclick="closeModal()">&times;</span>
+                        <h2>Payment Failed</h2>
+                        <p id="error-message"></p>
+                        <button id="retry-payment-button">Retry Payment</button>
+                        <button onclick="closeModal()">Close</button>
+                    </div>
+                </div>
+                
             
                 <form id="checkout-form" method="POST" action="{% url 'place_order' %}">
                     {% csrf_token %}
@@ -186,6 +198,45 @@
         justify-content: space-between;
         margin-bottom: 10px;
     }
+  
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-content {
+        background-color: white;
+        margin: 15% auto;
+        padding: 20px;
+        border-radius: 8px;
+        width: 400px;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-content h2 {
+        color: red;
+    }
+
+    .close-btn {
+        background-color: #ff4d4d;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    .close-btn:hover {
+        background-color: #cc0000;
+    }
+   
 </style>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
@@ -253,50 +304,90 @@
 
         
   
-document.addEventListener("DOMContentLoaded", function() {
-    var razorpayRadio = document.getElementById("payment-razorpay");
-    var codRadio = document.getElementById("payment-4");
-    var razorpayButton = document.getElementById("razorpay-button");
-    var checkoutForm = document.getElementById("checkout-form");
+    document.addEventListener("DOMContentLoaded", function() {
+        var razorpayRadio = document.getElementById("payment-razorpay");
+        var codRadio = document.getElementById("payment-4");
+        var razorpayButton = document.getElementById("razorpay-button");
+        var checkoutForm = document.getElementById("checkout-form");
+        var retryButton = document.getElementById("retry-payment-button"); // Retry Button in Modal
+        var modal = document.getElementById("payment-failed-modal");
+        var closeModalButton = document.querySelector(".close");
 
-    // Show Razorpay button only if Razorpay is selected
-    razorpayRadio.addEventListener("change", function() {
-        razorpayButton.style.display = "block";
-    });
+        // Show Razorpay button only when Razorpay is selected
+        razorpayRadio.addEventListener("change", function() {
+            razorpayButton.style.display = "block";
+        });
 
-    codRadio.addEventListener("change", function() {
-        razorpayButton.style.display = "none";
-    });
+        codRadio.addEventListener("change", function() {
+            razorpayButton.style.display = "none";
+        });
 
-    // Razorpay Payment Processing
-    razorpayButton.onclick = function(e) {
-        e.preventDefault();
+        // Function to initiate Razorpay Payment
+        
+        function initiateRazorpay() {
+            var options = {
+                "key": "{{ razorpay_key_id }}",
+                "amount": document.getElementById("final_price").value * 100,
+                "currency": "INR",
+                "name": "Foot Vogue",
+                "order_id": document.getElementById("razorpay_order_id").value,
+                "handler": function(response) {
+                    // Set payment details regardless of success
+                    document.getElementById("razorpay_payment_id").value = response.razorpay_payment_id;
+                    document.getElementById("razorpay_order_id").value = response.razorpay_order_id;
+                    document.getElementById("razorpay_signature").value = response.razorpay_signature;
+                    checkoutForm.submit();
+                },
+                "theme": {"color": "#3399cc"}
+            };
 
-        var options = {
-            "key": "{{ razorpay_key_id }}",
-            "amount": document.getElementById("final_price").value * 100, // Use updated value
-            "currency": "INR",
-            "name": "Foot Vogue",
-            "order_id": document.getElementById("razorpay_order_id").value, // Updated order ID
-            "handler": function(response) {
-                // Set hidden fields with payment details
-                document.getElementById("razorpay_payment_id").value = response.razorpay_payment_id;
-                document.getElementById("razorpay_order_id").value = response.razorpay_order_id;
-                document.getElementById("razorpay_signature").value = response.razorpay_signature;
-
-                // Automatically submit the form to place the order
+            var rzp1 = new Razorpay(options);
+            
+            rzp1.on('payment.failed', function(response) {
+                // Set failed payment details
+                document.getElementById("razorpay_payment_id").value = 'failed_' + Date.now();
+                document.getElementById("razorpay_order_id").value = response.error.metadata.order_id;
+                document.getElementById("razorpay_signature").value = 'failed_payment';
                 checkoutForm.submit();
-            },
-            "theme": {
-                "color": "#3399cc"
-            }
+            });
+
+            rzp1.open();
+        }
+
+        // Handle Razorpay payment button click
+        razorpayButton.onclick = function(e) {
+            e.preventDefault();
+            initiateRazorpay();
         };
 
-        var rzp1 = new Razorpay(options);
-        rzp1.open();
-    };
-});
+        // Function to show modal on payment failure
+        function showModal(errorMsg) {
+            document.getElementById("error-message").innerText = errorMsg;
+            modal.style.display = "block";
+        }
 
+        // Function to close modal
+        function closeModal() {
+            modal.style.display = "none";
+        }
+
+        // Attach event listeners for modal close actions
+        closeModalButton.addEventListener("click", closeModal);
+        retryButton.addEventListener("click", function() {
+            closeModal();
+            initiateRazorpay();
+        });
+
+        // Close modal when clicking outside the modal content
+        window.addEventListener("click", function(event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        // Make closeModal globally accessible
+        window.closeModal = closeModal;
+    });
 
 </script>
 
