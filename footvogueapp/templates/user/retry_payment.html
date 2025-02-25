@@ -2,35 +2,94 @@
 {% load static %}
 
 {% block content %}
-<div class="container">
-    <h2>Retry Payment for Order #{{ order.id }}</h2>
-    <p class="lead">Total Amount: ₹{{ order.total_amount|floatformat:2 }}</p>
+<div class="container d-flex justify-content-center align-items-center vh-100">
+    <div class="card shadow-lg p-4 text-center" style="max-width: 500px; width: 100%;">
+        <h2 class="mb-3 text-primary">Retry Payment</h2>
+        <p class="lead text-muted">Order #{{ order.id }}</p>
+        <p class="h4 fw-bold">Total Amount: <span class="text-success">₹{{ order.total_amount|floatformat:2 }}</span></p>
 
-    <button id="retry-payment-btn" class="btn btn-primary">Retry Payment Now</button>
+        <button id="retry-payment-btn" class="btn btn-primary btn-lg mt-3">
+            <span id="button-text">Retry Payment Now</span>
+            <span id="loading-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+        </button>
 
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-    <script>
-        document.getElementById('retry-payment-btn').onclick = function(e) {
-            const options = {
-                "key": "{{ razorpay_key_id }}",
-                "amount": "{{ amount }}",
-                "currency": "INR",
-                "name": "Your Store Name",
-                "order_id": "{{ order.razorpay_order_id }}",
-                "handler": function(response) {
-                    window.location.href = "{% url 'handle_payment' %}?" + 
-                        `razorpay_payment_id=${response.razorpay_payment_id}&` +
-                        `razorpay_order_id=${response.razorpay_order_id}&` +
-                        `razorpay_signature=${response.razorpay_signature}`;
-                },
-                "theme": {
-                    "color": "#3399cc"
-                }
-            };
-            
-            const rzp = new Razorpay(options);
-            rzp.open();
-        };
-    </script>
+        <p class="mt-3 text-muted">Secure payment powered by <strong>Razorpay</strong></p>
+    </div>
 </div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+    document.getElementById('retry-payment-btn').onclick = function(e) {
+        const button = document.getElementById('retry-payment-btn');
+        const buttonText = document.getElementById('button-text');
+        const spinner = document.getElementById('loading-spinner');
+
+        // Show loading spinner
+        button.disabled = true;
+        buttonText.innerText = "Processing...";
+        spinner.classList.remove("d-none");
+
+        const options = {
+            "key": "{{ key_id }}",
+            "amount": "{{ amount|floatformat:2 }}",
+            "currency": "INR",
+            "name": "Your Store Name",
+            "order_id": "{{ razorpay_order_id }}",
+            "handler": function(response) {
+                fetch("{% url 'verify_payment' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    body: JSON.stringify({
+                        order_id: "{{ order.id }}",
+                        razorpay_order_id: response.razorpay_order_id,
+                        razorpay_payment_id: response.razorpay_payment_id,
+                        razorpay_signature: response.razorpay_signature
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("Payment Successful!");
+                        // Clear local cart data
+                        localStorage.removeItem('cartState');
+                        // Force refresh cart indicators
+                        document.dispatchEvent(new Event('cartUpdated'));
+                        window.location.href = "{% url 'order_summary' order.id %}";
+                    } else {
+                        alert("Payment verification failed. Please try again.");
+                        button.disabled = false;
+                        buttonText.innerText = "Retry Payment Now";
+                        spinner.classList.add("d-none");
+                    }
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    alert("An error occurred. Please try again.");
+                    button.disabled = false;
+                    buttonText.innerText = "Retry Payment Now";
+                    spinner.classList.add("d-none");
+                });
+            },
+            "theme": {
+                "color": "#007bff"
+            }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.open();
+    };
+</script>
+
+<style>
+    .card {
+        border-radius: 15px;
+        transition: 0.3s;
+    }
+    .card:hover {
+        box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.2);
+    }
+</style>
 {% endblock %}

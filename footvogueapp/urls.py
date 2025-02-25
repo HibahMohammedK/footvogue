@@ -61,6 +61,10 @@ urlpatterns = [
     path('checkout/', views.checkout, name='checkout'),
     path('place_order/', views.place_order, name='place_order'),
     path('order_summary/<int:order_id>/', views.order_summary, name='order_summary'),
+    path("retry-payment/<int:order_id>/", views.retry_payment, name="retry_payment"),
+    path("verify_payment/", views.verify_payment, name="verify_payment"),
+    path("order/payment-pending/<int:order_id>/", views.payment_pending, name="payment_pending"),
+
     
     
 

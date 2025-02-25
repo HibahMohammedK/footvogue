@@ -1,0 +1,14 @@
+{% extends "user/home.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container text-center">
+    <h2>Payment Pending for Order #{{ order.id }}</h2>
+    <p class="text-warning">Your payment for this order has not been completed.</p>
+    <p><strong>Total Amount:</strong> ₹{{ order.total_amount|floatformat:2 }}</p>
+    <p>Please complete the payment to process your order.</p>
+
+    <a href="{% url 'retry_payment' order.id %}" class="btn btn-primary">Retry Payment</a>
+    <a href="{% url 'profile' %}" class="btn btn-secondary">Go to My Orders</a>
+</div>
+{% endblock %}

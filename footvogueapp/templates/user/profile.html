@@ -351,6 +351,16 @@
                                                 </div>
                                             {% endfor %}
                                         </div>
+
+                                        <!-- Retry Payment Button (for Failed Orders) -->
+                                        {% if order.payment_status == 'Pending' and order.payment_method == 'razorpay' %}
+                                        <div class="mt-2">
+                                            <a href="{% url 'retry_payment' order.id %}" class="btn btn-warning btn-sm">
+                                                Retry Payment
+                                            </a>
+                                        </div>
+                                        {% endif %}
+
                                        <!-- Cancel Order Button -->
                                         {% if order.status != 'Cancelled' and order.status != 'Completed' and order.status != 'Delivered' %}
                                         <form method="POST" action="{% url 'user_cancel_order' order.id %}">
@@ -416,4 +426,69 @@
             console.error("Failed to copy: ", err);
         });
     }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        var retryButtons = document.querySelectorAll(".retry-payment");
+
+        retryButtons.forEach(function(button) {
+            button.addEventListener("click", function() {
+                var orderId = this.getAttribute("data-order-id");
+                var razorpayOrderId = this.getAttribute("data-razorpay-order-id");
+                var amount = this.getAttribute("data-amount") * 100; // Convert to paise
+
+                initiateRazorpay(orderId, razorpayOrderId, amount);
+            });
+        });
+
+        function initiateRazorpay(orderId, razorpayOrderId, amount) {
+            var options = {
+                "key": "{{ razorpay_key_id }}",
+                "amount": amount,
+                "currency": "INR",
+                "name": "Foot Vogue",
+                "order_id": razorpayOrderId,
+                "handler": function(response) {
+                    // Send payment details to backend for verification
+                    fetch("/update-payment-status/", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": getCSRFToken() // Fetch CSRF token dynamically
+                        },
+                        body: JSON.stringify({
+                            order_id: orderId,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_signature: response.razorpay_signature
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert("Payment successful!");
+                            location.reload(); // Reload to update order status
+                        } else {
+                            alert("Payment verification failed!");
+                        }
+                    });
+                },
+                "theme": {
+                    "color": "#3399cc"
+                }
+            };
+
+            var rzp1 = new Razorpay(options);
+            rzp1.on('payment.failed', function(response) {
+                alert("Payment failed: " + response.error.description);
+            });
+
+            rzp1.open();
+        }
+
+        // Function to get CSRF token dynamically
+        function getCSRFToken() {
+            return document.querySelector("[name=csrfmiddlewaretoken]").value;
+        }
+    });
+
 </script>
