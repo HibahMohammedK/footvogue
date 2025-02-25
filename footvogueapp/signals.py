@@ -14,8 +14,7 @@ def handle_referral_reward(sender, instance, created, **kwargs):
             referred_user = instance.user  
 
             # ✅ Ensure reward is only given for the first order
-            previous_orders = Order.objects.filter(user=referred_user).exclude(id=instance.id).exists()
-            if previous_orders:  
+            if Order.objects.filter(user=referred_user).exclude(id=instance.id).exists():
                 return  # Exit without giving rewards if this is not the first order
 
             # Find an active referral offer
@@ -24,16 +23,16 @@ def handle_referral_reward(sender, instance, created, **kwargs):
             ).first()
 
             if referral_offer:
-                reward_amount = Decimal(str(referral_offer.reward_amount))  
+                reward_amount = Decimal(str(referral_offer.reward_amount))  # Ensure Decimal type
 
                 # ✅ Reward the referrer
                 referrer_wallet, _ = Wallet.objects.get_or_create(user=referrer)
-                referrer_wallet.balance += reward_amount
+                referrer_wallet.balance = Decimal(str(referrer_wallet.balance)) + reward_amount
                 referrer_wallet.save()
 
                 # ✅ Reward the referred user
                 referred_wallet, _ = Wallet.objects.get_or_create(user=referred_user)
-                referred_wallet.balance += reward_amount
+                referred_wallet.balance = Decimal(str(referred_wallet.balance)) + reward_amount
                 referred_wallet.save()
 
                 # ✅ Mark the referral as "reward claimed"
@@ -55,4 +54,4 @@ def handle_referral_reward(sender, instance, created, **kwargs):
                     status="Completed",
                 )
 
-                print(f"✅ Referral Reward Applied: ₹{reward_amount} to {referrer} & {referred_user}")
+                print(f"✅ Referral Reward Applied: ₹{reward_amount} to {referrer.email} & {referred_user.email}")
