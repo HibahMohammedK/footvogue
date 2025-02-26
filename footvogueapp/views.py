@@ -40,43 +40,43 @@ from django.template.loader import render_to_string
 
 @never_cache
 def home(request):
-    # Fetch products from the database
-    products = Product.objects.prefetch_related(
-        'productvariant_set__productimage_set'
-    ).filter(is_deleted=False)  # Adjust filters based on your requirements
-
+    # Fetch all categories for the navbar
     categories = Category.objects.all()
 
-    # Create a rating range (1 to 5) for use in the template
-    rating_range = range(1, 6)
+    # Get the selected category from the request
+    selected_category = request.GET.get('category')
+
+    # Fetch top-selling products (category-wise if a category is selected)
+    top_products, top_categories = get_sales_analytics(category_id=selected_category)
+
+    # Fetch products for the main product listing
+    products = Product.objects.prefetch_related(
+        'productvariant_set__productimage_set'
+    ).filter(is_deleted=False)
 
     # Fetch cart items for the logged-in user
     cart_items = []
     total_price = 0
 
     if request.user.is_authenticated:
-        # Retrieve all cart items for the logged-in user
         cart_items = Cart.objects.filter(user=request.user)
-        
-        # Calculate the total price of items in the cart
         total_price = sum(item.quantity * item.product_variant.price for item in cart_items)
 
         for item in cart_items:
-            # Retrieve the first image for the variant
             image = ProductImage.objects.filter(variant=item.product_variant).first()
             item.image_url = image.image_url.url if image else None
 
-
-    
     context = {
-        'products': products, 
+        'products': products,
         'categories': categories,
-        'rating_range': rating_range,
+        'rating_range': range(1, 6),
         'cart_items': cart_items,
         'total_price': total_price,
+        'top_products': top_products,
+        'top_categories': top_categories,
+        'selected_category': selected_category,
     }
 
-    # Render the home template with products and rating range
     return render(request, 'user/home.html', context)
 
 
