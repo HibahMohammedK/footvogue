@@ -59,7 +59,7 @@
 
                         <!-- Order-level Discounts -->
                         <div class="order-totals">
-                        <p>Subtotal: ₹{{ order.subtotal }}</p>
+                        <!-- <p>Subtotal: ₹{{ order.subtotal }}</p> -->
 
                         {% if order.applied_coupon %}
                         <div class="coupon-discount">
@@ -77,13 +77,13 @@
                             <p class="text-success fs-5">
                             Total Savings: ₹{{ total_savings|floatformat:2 }}
                             {% if order.applied_coupon %}
-                                (Includes ₹{{ order.subtotal|sub:order.total_amount|sub:order.discount|floatformat:2 }} from offers + ₹{{ order.discount }} from coupon)
+                                <!-- (Includes ₹{{ order.subtotal|sub:order.total_amount|sub:order.discount|floatformat:2 }} from offers + ₹{{ order.discount }} from coupon) -->
                             {% endif %}
                             </p>
                         {% endwith %}
                         </div>
 
-                        <p class="total-amount">Grand Total: ₹{{ order.total_amount }}</p>
+                        <strong><p class="total-amount">Grand Total: ₹{{ order.total_amount }}</p></strong>
                         </div>
                     </div>
                     <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>

@@ -2,19 +2,19 @@
 {% load static %}
 
 {% block content %}
-<div class="container d-flex justify-content-center align-items-center vh-100">
+<div class="container d-flex justify-content-center align-items-center vh-100" style="margin-left: 380px;"><br>
     <div class="card shadow-lg p-4 text-center" style="max-width: 500px; width: 100%;">
-        <h2 class="mb-3 text-primary">Retry Payment</h2>
+        <h2 class="mb-3 text-secondary">Retry Payment</h2>
         <p class="lead text-muted">Order #{{ order.id }}</p>
         <p class="h4 fw-bold">Total Amount: <span class="text-success">₹{{ order.total_amount|floatformat:2 }}</span></p>
 
-        <button id="retry-payment-btn" class="btn btn-primary btn-lg mt-3">
+        <button id="retry-payment-btn" class="primary-btn order-submit btn-lg mt-3">
             <span id="button-text">Retry Payment Now</span>
             <span id="loading-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
         </button>
 
-        <p class="mt-3 text-muted">Secure payment powered by <strong>Razorpay</strong></p>
-    </div>
+        <p class="mt-3 text-muted">Secure payment powered by <strong>Razorpay</strong></p><br>
+    </div><br>
 </div>
 
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
