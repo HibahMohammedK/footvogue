@@ -347,6 +347,17 @@
                                                         <p>{{ item.color }} - {{ item.size }}</p>
                                                         <p>Quantity: {{ item.quantity }}</p>
                                                         <p>Price: ₹{{ item.price|floatformat:2 }}</p>
+
+                                                        <!-- Return Button for This Specific Item -->
+                                                        {% if order.status == 'Completed' %}
+                                                        <div class="mt-2">
+                                                            <form method="GET" action="{% url 'request_return' item.id %}">
+                                                                <button type="submit" class="btn btn-warning btn-sm">
+                                                                    Return {{ item.product_name }} (Size: {{ item.size }})
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                        {% endif %}
                                                     </div>
                                                 </div>
                                             {% endfor %}
@@ -367,13 +378,6 @@
                                             {% csrf_token %}
                                             <input type="hidden" name="order_id" value="{{ order.id }}">
                                             <button type="submit" name="cancel_order" class="btn btn-danger btn-sm">Cancel Order</button>
-                                        </form>
-                                        {% endif %}
-
-                                       <!-- Return Product Button (for Completed Orders) -->
-                                        {% if order.status == 'Completed' %}
-                                        <form method="GET" action="{% url 'request_return' order.id %}">
-                                            <button type="submit" class="btn btn-warning btn-sm">Request Return</button>
                                         </form>
                                         {% endif %}
                                     </li>

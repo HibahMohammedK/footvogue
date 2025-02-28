@@ -5,7 +5,7 @@ import razorpay
 from django.conf import settings
 from django.core.cache import cache
 from .models import OrderItem, OTP, Product, ProductVariant, ProductImage
-from django.db.models import Sum, Prefetch, F, Max
+from django.db.models import Sum, Prefetch, F, Max, Count
 from django.utils import timezone
 
 def generate_and_send_otp(user):
@@ -85,6 +85,21 @@ def get_sales_analytics(timeframe_days=None, category_id=None):
         .distinct()[:10]  # Add distinct to remove duplicates
     )
 
+    top_categories_data = (
+        base_query.values(
+            category_id=F('product_variant__product__category__id'),
+            category_name=F('product_variant__product__category__category_name'),
+        )
+        .annotate(
+            total_sold=Sum('quantity'),
+            total_revenue=Sum(F('quantity') * F('product_variant__price')),
+            total_products=Count('product_variant__product', distinct=True)
+        )
+        .order_by('-total_sold')
+        .distinct()[:10]
+    )
+
+
     # Step 2: Fetch image URLs and discounted prices for these products
     product_ids = [p['product_id'] for p in top_products_data]
     
@@ -128,6 +143,6 @@ def get_sales_analytics(timeframe_days=None, category_id=None):
         ) if product['discounted_price'] < product['variant_price'] else 0
         )
 
-    result = (list(top_products_data), [])
+    result = (list(top_products_data), list(top_categories_data))
     cache.set(cache_key, result, timeout=3600)
     return result

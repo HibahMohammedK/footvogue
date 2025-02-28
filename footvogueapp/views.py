@@ -896,6 +896,7 @@ def profile(request):
             # Fetch the first image for the product variant
             image = item.product_variant.productimage_set.first()
             items.append({
+                'id': item.id,
                 'product_name': item.product_variant.product.name,
                 'product_image': image.image_url.url if image else None,
                 'color': item.product_variant.color.color_name,
@@ -2072,7 +2073,7 @@ def is_admin(user):
 def request_return(request, order_item_id):
     """Allow users to request a return with a predefined reason and optional additional notes."""
     
-    order_item = get_object_or_404(OrderItem, order_id=order_item_id, order__user=request.user)
+    order_item = get_object_or_404(OrderItem, id=order_item_id, order__user=request.user)
 
     if request.method == "POST":
         reason_id = request.POST.get("reason")
@@ -2140,7 +2141,7 @@ def update_return_status(request):
 
             # ✅ Process refund if return is approved and order was paid
             if new_status == "Approved" and order.payment_status == "Paid":
-                refund_amount = Decimal(str(order.total_amount))  # Ensure Decimal type
+                refund_amount = Decimal(str(order_item.price))  # Ensure Decimal type
                 
                 # ✅ Get or create the user's wallet
                 wallet, _ = Wallet.objects.get_or_create(user=order.user)
