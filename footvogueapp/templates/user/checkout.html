@@ -152,6 +152,14 @@
                         <input type="radio" name="payment_method" id="payment-4" value="cod">
                         <label for="payment-4"><span></span>Cash on Delivery</label>
                     </div>
+                    
+                    <!-- Wallet Payment Option -->
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-wallet" value="wallet">
+                        <label for="payment-wallet">
+                            <span></span>Pay with Wallet (Balance: ₹{{ request.user.wallet.balance }})
+                        </label>
+                    </div>
                 
                     <!-- Razorpay Payment Button (Initially Hidden) -->
                     <button id="razorpay-button" class="btn btn-primary" style="display: none;">Pay with Razorpay</button>
