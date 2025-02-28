@@ -1194,6 +1194,9 @@ def checkout(request):
             razorpay_order_id = razorpay_order['id']
         except Exception as e:
             messages.error(request, f"Payment gateway error: {str(e)}")
+    # Get wallet balance
+    wallet_balance = user.wallet.balance if hasattr(user, 'wallet') else Decimal(0)
+
 
     return render(request, "user/checkout.html", {
         "cart_items": cart_data,
@@ -1205,8 +1208,8 @@ def checkout(request):
         "shipping_address": shipping_address,
         "razorpay_order_id": razorpay_order_id,
         "address_form": AddressForm(),
+        "wallet_balance": wallet_balance,
     })
-
 @login_required
 @transaction.atomic
 def place_order(request):
@@ -1293,6 +1296,7 @@ def place_order(request):
 
         # --- Payment Processing ---
         payment_success = False
+
         if payment_method == "razorpay":
             razorpay_payment_id = request.POST.get("razorpay_payment_id", "")
             
@@ -1312,27 +1316,28 @@ def place_order(request):
                     messages.error(request, f"Payment failed: {str(e)}")
 
         elif payment_method == "wallet":
-            if user.wallet_balance >= final_amount:
-                user.wallet_balance -= final_amount
-                user.save()
-                Transaction.objects.create(user=user, amount=-final_amount, transaction_type="Order Payment")
+            wallet = user.wallet  # Access the wallet through the related field
+            if wallet.balance >= final_amount:
+                # Deduct from wallet
+                wallet.debit(final_amount)
+                # Create a transaction record
+                Transaction.objects.create(
+                    wallet=wallet,
+                    amount=final_amount,
+                    transaction_type="Debit",
+                    status="Completed",
+                    created_at=now(),
+                )
                 payment_success = True
+                order.payment_status = "Paid"
+                order.status = "Processing"
+                messages.success(request, "Payment successful using wallet.")
             else:
                 messages.error(request, "Insufficient wallet balance.")
+                return redirect("checkout")
 
         # --- Update Order Status & Stock ---
         if payment_success:
-            order.status = "Processing"
-            order.payment_status = "Paid"
-            
-            if payment_method == "razorpay":
-                razorpay_payment_id = request.POST.get("razorpay_payment_id")
-                if not razorpay_payment_id:
-                    messages.error(request, "Payment successful, but Razorpay Payment ID is missing.")
-                else:
-                    order.razorpay_payment_id = razorpay_payment_id
-
-            
             # Reduce stock only after successful payment
             for item in order.items.all():
                 variant = item.product_variant
@@ -1342,10 +1347,9 @@ def place_order(request):
             # Mark coupon as used
             if applied_coupon:
                 UserCouponUsage.objects.create(user=user, coupon=applied_coupon, order=order)
-                # Update used_count
                 applied_coupon.used_count += 1
                 applied_coupon.save()
-            
+
             messages.success(request, "Order placed successfully!")
         else:
             messages.warning(request, "Payment failed. Order saved as pending.")

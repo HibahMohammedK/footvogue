@@ -476,7 +476,7 @@ class Wishlist(models.Model):
     class Meta:
         unique_together = ('user', 'product_variant')  # Prevent duplicate wishlist entries
 
-    
+   
 class Transaction(models.Model):
     TRANSACTION_TYPE_CHOICES = [
         ('Credit', 'Credit'),
