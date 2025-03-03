@@ -1,11 +1,11 @@
 {% extends "user/home.html" %}
 
 {% block content %}
-<div class="container mt-5">
-    <h2 class="mb-4">My Wallet</h2>
+<div class="container mt-5"><br>
+    <h2 class="mb-4 text-center">My Wallet</h2>
 
     <div class="card p-3 mb-4">
-        <h4>Wallet Balance: ₹{{ wallet.balance }}</h4>
+        <h4 class="text-success">Wallet Balance: ₹{{ wallet.balance }}</h4>
     </div>
 
     <h3>Transaction History</h3>
@@ -50,6 +50,6 @@
             </tr>
             {% endfor %}
         </tbody>
-    </table>
+    </table><br>
 </div>
 {% endblock %}

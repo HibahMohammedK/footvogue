@@ -36,7 +36,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from django.db.models.functions import TruncDay
 from reportlab.lib.styles import getSampleStyleSheet
 from django.template.loader import render_to_string
-   
+from django.contrib.auth.views import PasswordResetView
+from django.core.mail import EmailMultiAlternatives
+from django.contrib.sites.shortcuts import get_current_site
 
 @never_cache
 def home(request):
@@ -273,6 +275,20 @@ def login_view(request):
 
     return render(request, 'login.html')
 
+class CustomPasswordResetView(PasswordResetView):
+    def send_mail(self, subject_template_name, email_template_name, context, from_email, to_email, html_email_template_name=None):
+        request = self.request
+        context["domain"] = get_current_site(request).domain  # Dynamically fetch site domain
+        context["protocol"] = "https" if request.is_secure() else "http"  # Ensure correct protocol
+        
+        subject = render_to_string(subject_template_name, context).strip()
+        message_txt = render_to_string(email_template_name, context)
+        message_html = render_to_string(html_email_template_name, context) if html_email_template_name else None
+        
+        email = EmailMultiAlternatives(subject, message_txt, from_email, [to_email])
+        if message_html:
+            email.attach_alternative(message_html, "text/html")
+        email.send()
 
 
 ### admin view ###
@@ -747,7 +763,7 @@ def product_details(request, product_id, variant_id=None):
         cart_item.quantity += quantity
         cart_item.price = discounted_price
         cart_item.save()
-        return redirect('cart')
+        return redirect('cart_view')
     
     # Product rating calculations
     ratings = Rating.objects.filter(product=product)
@@ -1210,6 +1226,7 @@ def checkout(request):
         "address_form": AddressForm(),
         "wallet_balance": wallet_balance,
     })
+
 @login_required
 @transaction.atomic
 def place_order(request):
@@ -1311,6 +1328,13 @@ def place_order(request):
                         'razorpay_payment_id': razorpay_payment_id,
                         'razorpay_signature': request.POST.get("razorpay_signature")
                     })
+
+                    # ✅ Save Payment ID
+                    order.razorpay_payment_id = razorpay_payment_id
+                    order.payment_status = "Paid"
+                    order.status = "Processing"
+                    order.save()
+
                     payment_success = True
                 except Exception as e:
                     messages.error(request, f"Payment failed: {str(e)}")
@@ -1331,10 +1355,11 @@ def place_order(request):
                 payment_success = True
                 order.payment_status = "Paid"
                 order.status = "Processing"
-                messages.success(request, "Payment successful using wallet.")
+                messages.success(request, "Payment successful using wallet. Please try another payment method.")
             else:
                 messages.error(request, "Insufficient wallet balance.")
-                return redirect("checkout")
+                return redirect("payment_pending", order_id=order.id)
+
 
         # --- Update Order Status & Stock ---
         if payment_success:
@@ -1504,7 +1529,8 @@ def user_cancel_order(request, order_id):
                 wallet, _ = Wallet.objects.get_or_create(user=request.user)
                 
                 # ✅ Add refunded amount to the wallet
-                wallet.balance += refund_amount
+                wallet.balance = Decimal(str(wallet.balance)) + refund_amount
+
                 wallet.save()
 
                 # ✅ Log the refund transaction
