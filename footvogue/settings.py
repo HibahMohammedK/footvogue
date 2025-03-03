@@ -32,13 +32,14 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'footvogueapp',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'footvogueapp',
+   
 
     'django.contrib.sites',  # Required by django-allauth
     'allauth',
@@ -64,7 +65,9 @@ ROOT_URLCONF = 'footvogue.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [], 
+        'DIRS': [
+            os.path.join(BASE_DIR, 'footvogueapp/templates'), 
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -150,6 +153,10 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'hibahaslam411@gmail.com'
 EMAIL_HOST_PASSWORD = 'REDACTED'
 
+
+# forgot password
+
+DOMAIN_NAME = "127.0.0.1:8000"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

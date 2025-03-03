@@ -2,166 +2,187 @@
 {% load static %}
 {% load math_filters %}
 {% block content %}
-<div class="container">
-    <div class="order-summary-wrapper text-center">
-        <!-- Success Icon -->
-        <div class="success-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10" stroke="green"></circle>
-                <polyline points="9 12 12 15 16 9" stroke="green"></polyline>
-            </svg>
-        </div>
-        <h2 class="text-success">Order Placed Successfully!</h2>
-        <p class="text-muted">Thank you for your purchase. Your order has been placed and is now being processed.</p>
-
-        <hr class="my-4">
-
-        <!-- Order Details -->
-        <div class="order-details text-left">
-            <h3>Your Order Summary</h3>
-            <p><strong>Order ID:</strong> {{ order.id }}</p>
-            <p><strong>Status:</strong> <span class="badge badge-info">{{ order.status }}</span></p>
-
-
-            <h4 class="mt-4">Shipping Address</h4>
-            <div class="shipping-address bg-light p-3 rounded">
-                <p>{{ order.shipping_address.address_line1 }}</p>
-                <p>{{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}</p>
-                <p>{{ order.shipping_address.country }}</p>
+<div class="container py-5" style="margin-left: 180px;">
+    <div class="order-summary-card mx-auto">
+        <!-- Success Header -->
+        <div class="success-header text-center mb-5">
+            <div class="success-icon animate__animated animate__bounceIn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="#28a745" class="bi bi-check2-circle" viewBox="0 0 16 16">
+                    <path d="M2.5 8a5.5 5.5 0 0 1 8.25-4.764.5.5 0 0 0 .5-.866A6.5 6.5 0 1 0 14.5 8a.5.5 0 0 0-1 0 5.5 5.5 0 1 1-11 0"/>
+                    <path d="M15.354 3.354a.5.5 0 0 0-.708-.708L8 9.293 5.354 6.646a.5.5 0 1 0-.708.708l3 3a.5.5 0 0 0 .708 0z"/>
+                </svg>
             </div>
+            <h1 class="display-5 fw-bold text-success mb-3">Order Confirmed!</h1>
+            <p class="lead text-muted">Your order #{{ order.id }} is being processed</p>
+        </div>
 
-            <h4 class="mt-4">Order Items</h4>
-            <ul class="list-group">
+        <!-- Order Overview -->
+        <div class="order-overview card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 border-end">
+                        <h5 class="text-secondary mb-3"><i class="bi bi-clock-history me-2"></i>Status</h5>
+                        <span class="badge bg-info bg-opacity-10 text-info fs-6">{{ order.status }}</span>
+                    </div>
+                    <div class="col-md-4 border-end">
+                        <h5 class="text-secondary mb-3"><i class="bi bi-credit-card me-2"></i>Payment</h5>
+                        <span class="badge bg-success bg-opacity-10 text-success fs-6">{{ order.payment_method|upper }}</span>
+                    </div>
+                    <div class="col-md-4">
+                        <h5 class="text-secondary mb-3"><i class="bi bi-box-seam me-2"></i>Est. Delivery</h5>
+                        <span class="text-dark fs-6">3-5 business days</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shipping Address -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <h4 class="card-title mb-4"><i class="bi bi-truck me-2"></i>Shipping Address</h4>
+                <div class="address-card bg-light p-4 rounded-3">
+                    <p class="mb-1 fw-medium">{{ order.shipping_address.full_name }}</p>
+                    <p class="mb-1">{{ order.shipping_address.address_line1 }}</p>
+                    <p class="mb-1">{{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}</p>
+                    <p class="mb-0">{{ order.shipping_address.country }}</p>
+                </div>
+            </div>
+        </div><br>
+
+        <!-- Order Items -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <h4 class="card-title mb-4"><i class="bi bi-receipt me-2"></i>Order Details</h4>
                 {% for item in order_items %}
-                <div class="cart-item">
-                    <div class="cart-item-image">
-                        {% if item.image_url %}
-                            <img src="{{ item.image_url }}" alt="{{ item.product_name }}">
-                        {% else %}
-                            <img src="{% static 'images/placeholder.png' %}" alt="No image available">
-                        {% endif %}
+                <div class="order-item row g-3 mb-4 pb-4 border-bottom">
+                    <div class="col-3 col-md-2">
+                        <img src="{{ item.image_url|default:'/static/images/placeholder.png' }}" 
+                             class="img-fluid rounded-2" 
+                             alt="{{ item.product_name }}">
                     </div>
-                    <div class="cart-item-details">
-                        <h3>{{ item.product_name }}</h3>
-                        <p>{{ item.color }} - {{ item.size }}</p>
-                        <!-- Order Items Section -->
-                        {% for item in order_items %}
-                        <div class="order-item">
-                        <p><del class="text-danger">₹{{ item.original_price }}</del> 
-                            <span class="text-success">₹{{ item.discounted_price }}</span></p>
-                        <p>{{ item.quantity }} x ₹{{ item.discounted_price }}</p>
-                        <p>Total: ₹{{ item.total_price }}</p>
-                        {% if item.total_savings > 0 %}
-                            <p class="text-success">Item Savings: ₹{{ item.total_savings }}</p>
-                        {% endif %}
-                        </div>
-                        {% endfor %}
-
-                        <!-- Order-level Discounts -->
-                        <div class="order-totals">
-                        <!-- <p>Subtotal: ₹{{ order.subtotal }}</p> -->
-
-                        {% if order.applied_coupon %}
-                        <div class="coupon-discount">
-                            <p>Coupon Applied: <strong>{{ order.applied_coupon.coupon_code }}</strong></p>
-                            <p class="text-success">
-                            Coupon Discount ({{ order.applied_coupon.get_discount_type_display }}): 
-                            -₹{{ order.discount }}
-                            </p>
-                        </div>
-                        {% endif %}
-
-                        <!-- Total Savings Calculation -->
-                        <div class="total-savings">
-                        {% with total_savings=order.subtotal|sub:order.total_amount %}
-                            <p class="text-success fs-5">
-                            Total Savings: ₹{{ total_savings|floatformat:2 }}
-                            {% if order.applied_coupon %}
-                                <!-- (Includes ₹{{ order.subtotal|sub:order.total_amount|sub:order.discount|floatformat:2 }} from offers + ₹{{ order.discount }} from coupon) -->
-                            {% endif %}
-                            </p>
-                        {% endwith %}
-                        </div>
-
-                        <strong><p class="total-amount">Grand Total: ₹{{ order.total_amount }}</p></strong>
+                    <div class="col-9 col-md-10">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5 class="mb-2">{{ item.product_name }}</h5>
+                                <p class="text-muted mb-2">{{ item.color }} / {{ item.size }}</p>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <span class="badge bg-light text-dark">Qty: {{ item.quantity }}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6 text-md-end">
+                                <div class="price-block">
+                                    {% if item.total_savings > 0 %}
+                                    <small class="text-muted text-decoration-line-through">₹{{ item.original_price }}</small>
+                                    {% endif %}
+                                    <div class="fs-5 fw-medium text-success">₹{{ item.discounted_price }}</div>
+                                    {% if item.total_savings > 0 %}
+                                    <small class="text-success">Saved ₹{{ item.total_savings }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
-                    <a href="{% url 'download_invoice' order_id=order.id %}" class="btn btn-secondary">Download Invoice</a>
-
                 </div>
                 {% endfor %}
-            </ul>
+            </div>
+        </div><br>
+
+        <!-- Order Summary -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h4 class="card-title mb-4"><i class="bi bi-wallet2 me-2"></i>Payment Summary</h4>
+                <div class="row">
+                    <div class="col-lg-8">
+                        {% if order.applied_coupon %}
+                        <div class="coupon-alert alert alert-success bg-opacity-10 border-0">
+                            <i class="bi bi-tag-fill me-2"></i>
+                            Coupon <strong>{{ order.applied_coupon.coupon_code }}</strong> applied
+                            (-₹{{ order.discount }})
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="total-summary">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Subtotal:</span>
+                                <span>₹{{ order.subtotal }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2 text-success">
+                                <span>Total Savings:</span>
+                                <span>-₹{{ order.subtotal|sub:order.total_amount }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between fw-bold fs-5 pt-2 border-top">
+                                <span>Grand Total:</span>
+                                <span>₹{{ order.total_amount }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="d-flex gap-3 mt-5 justify-content-center">
+            <a href="{% url 'home' %}" class="btn btn-lg btn-outline-secondary px-4">
+                <i class="bi bi-arrow-left me-2"></i>Continue Shopping
+            </a>
+            <a href="{% url 'download_invoice' order_id=order.id %}" class="btn btn-lg btn-primary px-4">
+                <i class="bi bi-download me-2"></i>Download Invoice
+            </a>
         </div>
     </div>
-</div>
+</div><br>
 
 <style>
-    .order-summary-wrapper {
-        max-width: 800px;
-        margin: 0 auto;
+    .order-summary-card {
+        max-width: 1000px;
         background: #fff;
-        border-radius: 8px;
-        padding: 20px;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     }
 
     .success-icon {
-        margin-bottom: 20px;
+        transition: transform 0.3s ease;
     }
 
-    .success-icon svg {
-        width: 80px;
-        height: 80px;
-        color: green;
+    .success-icon:hover {
+        transform: scale(1.1);
     }
 
-    .text-success {
-        color: #28a745;
+    .address-card {
+        background: #f8f9fa;
+        border: 1px solid #eee;
     }
 
-    .text-muted {
-        color: #6c757d;
+    .order-item img {
+        transition: transform 0.3s ease;
     }
 
-    .badge-info {
-        background-color: #17a2b8;
-        color: #fff;
-        font-size: 14px;
-        padding: 5px 10px;
-        border-radius: 12px;
+    .order-item:hover img {
+        transform: scale(1.05);
     }
 
-    .text-primary {
-        color: #007bff;
-        font-weight: bold;
+    .price-block {
+        min-width: 120px;
     }
 
-    .shipping-address {
-        border: 1px solid #e9ecef;
+    .coupon-alert {
+        background-color: rgba(25, 135, 84, 0.1);
+        border: 1px solid rgba(25, 135, 84, 0.2);
     }
-
-    .list-group-item {
-        font-size: 16px;
-    }
-
-    .product-image {
-        max-width: 60px;
-        max-height: 60px;
-        object-fit: cover;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-    }
-
-    hr {
-        border-top: 1px solid #ddd;
-    }
-    .cart-item-image img {
+    .order-item img {
         max-width: 100px;
         max-height: 100px;
         object-fit: cover;
         border-radius: 8px;
         border: 1px solid #ddd;
+    }
+
+    @media (max-width: 768px) {
+        .order-overview .col-md-4 {
+            border: none !important;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #eee !important;
+        }
     }
 </style>
 {% endblock %}

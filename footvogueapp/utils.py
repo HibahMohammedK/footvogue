@@ -11,6 +11,7 @@ from django.utils import timezone
 def generate_and_send_otp(user):
     # Generate a random 6-digit OTP
     otp_code = ''.join(random.choices(string.digits, k=6))
+    print(otp_code)
 
     # Save OTP in the database
     OTP.objects.create(

@@ -364,13 +364,16 @@
                                         </div>
 
                                         <!-- Retry Payment Button (for Failed Orders) -->
-                                        {% if order.payment_status == 'Pending' and order.payment_method == 'razorpay' %}
-                                        <div class="mt-2">
-                                            <a href="{% url 'retry_payment' order.id %}" class="btn btn-warning btn-sm">
-                                                Retry Payment
-                                            </a>
-                                        </div>
+                                        {% if order.payment_status == 'Pending' %}
+                                            {% if order.payment_method == 'razorpay' or order.payment_method == 'wallet' %}
+                                                <div class="mt-2">
+                                                    <a href="{% url 'retry_payment' order.id %}" class="btn btn-warning btn-sm">
+                                                        Retry Payment
+                                                    </a>
+                                                </div>
+                                            {% endif %}
                                         {% endif %}
+
 
                                        <!-- Cancel Order Button -->
                                         {% if order.status != 'Cancelled' and order.status != 'Completed' and order.status != 'Delivered' %}
