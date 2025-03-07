@@ -1,20 +1,20 @@
-
-from django.db import models
-from django.contrib.auth.models import AbstractUser
-from PIL import Image
 import secrets
 import string
-from django.utils import timezone
+from decimal import Decimal
+from PIL import Image
+from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 from django.utils.timezone import now
+from django.contrib.auth.models import AbstractUser
 
 class CustomUser(AbstractUser):
     # Additional fields
     name = models.CharField(max_length=255, blank=True, null=True)  # Full name of the user
-    phone_number = models.CharField(max_length=15, blank=True, null=True)  # For OTP login
+    phone_number = models.CharField(max_length=15, blank=True, null=True) #phone number of the user
     google_account_id = models.CharField(max_length=255, blank=True, null=True)  # For Google login
-    is_verified = models.BooleanField(default=False)  # Whether the user is verified via OTP or email
+    is_verified = models.BooleanField(default=False)  # Whether the user is verified via OTP 
     is_staff = models.BooleanField(default=False)  # Whether the user is an admin
     created_at = models.DateTimeField(auto_now_add=True)  # Timestamp when the user was created
     updated_at = models.DateTimeField(auto_now=True)  # Timestamp when the user was last updated
@@ -32,7 +32,6 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username  # Return the username when the user is printed
-
 
 
 class OTP(models.Model):
@@ -61,8 +60,6 @@ class OTP(models.Model):
             models.Index(fields=['otp']),
         ]
 
-
-#### admin models ###
 
 class Category(models.Model):
     category_name = models.CharField(max_length=255, unique=True)
@@ -112,9 +109,8 @@ class ProductVariant(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Add this method
     def get_discounted_price(self):
-        from .models import Offer  # Avoid circular import
+        from .models import Offer  
 
         original_price = self.price
         best_offer = Offer.objects.filter(
@@ -187,7 +183,7 @@ class Address(models.Model):
     country = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    is_default = models.BooleanField(default=False)  # New field to mark default address
+    is_default = models.BooleanField(default=False)  
 
     def __str__(self):
         return f"{self.address_line1}, {self.city}, {self.state}, {self.country}"
@@ -201,8 +197,7 @@ class Address(models.Model):
             Address.objects.filter(user=self.user).update(is_default=False)
         super(Address, self).save(*args, **kwargs)
 
-from decimal import Decimal
-from django.utils import timezone
+
 
 class Coupon(models.Model):
     DISCOUNT_TYPES = [
@@ -273,7 +268,7 @@ class Coupon(models.Model):
 class UserCouponUsage(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     coupon = models.ForeignKey(Coupon, on_delete=models.CASCADE)
-    order = models.ForeignKey('Order', on_delete=models.CASCADE)  # Link to your Order model
+    order = models.ForeignKey('Order', on_delete=models.CASCADE)  
     used_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -292,6 +287,7 @@ class Order(models.Model):
     PAYMENT_METHOD_CHOICES = [
         ('COD', 'Cash on Delivery'),
         ('Razorpay', 'Razorpay'),
+        ('Wallet', 'Wallet'),
     ]
 
     PAYMENT_STATUS_CHOICES = [
@@ -310,7 +306,7 @@ class Order(models.Model):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     applied_coupon = models.ForeignKey(Coupon, null=True, blank=True, on_delete=models.SET_NULL)
 
-    # ✅ NEW FIELDS FOR RAZORPAY INTEGRATION
+    # FIELDS FOR RAZORPAY INTEGRATION
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='COD')
     razorpay_payment_id = models.CharField(max_length=100, null=True, blank=True)
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="Pending")
@@ -333,9 +329,9 @@ class OrderItem(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    
     def __str__(self):
         return f"{self.quantity}x {self.product_variant.product.name} for Order #{self.order.id}"
+    
     
 class Cart(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
@@ -365,8 +361,6 @@ class Cart(models.Model):
         return discounted_price * self.quantity
 
 
-
-
 class Wallet(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="wallet")
     balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -381,6 +375,7 @@ class Wallet(models.Model):
             self.save()
             return True
         return False
+
 
 class Offer(models.Model):
     PRODUCT = 'product'
