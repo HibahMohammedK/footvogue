@@ -1,0 +1,501 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Page</title>
+    <!-- Add your CSS links here -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    		<!-- Google font -->
+		<link href="https://fonts.googleapis.com/css?family=Montserrat:400,500,700" rel="stylesheet">
+
+		
+
+		
+
+		<!-- Font Awesome Icon -->
+		<link rel="stylesheet" href="{% static 'css/font-awesome.min.css'%}">
+
+		<!-- Custom stlylesheet -->
+		<link type="text/css" rel="stylesheet" href="{% static 'css/style.css'%}"/>
+    <style>
+        /* Global Styles */
+        body {
+            background-color: #f4f4f4;
+            font-family: Arial, sans-serif;
+            color: #333;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            background-color: #f8f9fa; /* Lighter background color */
+            color: #333;
+            height: 100vh;
+            padding-top: 30px;
+            border-right: 2px solid #e1e1e1;
+        }
+
+        .sidebar h4 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .sidebar .nav-link {
+            color: #333 !important;
+            padding: 12px 20px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .sidebar .nav-link.active {
+            background-color: #dc3545 !important;
+            color: #fff !important;
+        }
+
+        /* Content Area Styles */
+        .content {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 8px;
+            margin-left: 20px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .content h5 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+
+        .content p {
+            font-size: 18px;
+            color: #555;
+        }
+
+        .content .btn {
+            margin-top: 15px;
+        }
+
+        .content .btn-outline-primary {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+
+        .content .btn-outline-primary:hover {
+            background-color: #dc3545;
+            color: #fff;
+        }
+
+        /* Footer Styling */
+        footer {
+            text-align: center;
+            padding: 20px;
+            background-color: #333;
+            color: white;
+            width: 100%;
+            bottom: 0;
+        }
+        .header-links a, .header-ctn a {
+            text-decoration: none;
+        }
+
+        .header-links a:hover {
+            text-decoration: none;
+            color: #dc3545; /* Optional: Change color on hover */
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <!-- TOP HEADER -->
+        <div id="top-header">
+            <div class="container">
+                <ul class="header-links pull-left">
+                    <li><a href="#"><i class="fa fa-phone"></i> +021-95-51-84</a></li>
+                    <li><a href="#"><i class="fa fa-envelope-o"></i> email@email.com</a></li>
+                    <li><a href="#"><i class="fa fa-map-marker"></i> 1734 Stonecoal Road</a></li>
+                </ul>
+                <ul class="header-links pull-right">
+                    <li><a href="{% url 'wallet' %}"><i class="fa fa-rupee"></i> Wallet </a></li>
+                    {% if user.is_authenticated %}
+                        <li><a href="{% url 'profile' %}"><i class="fa fa-user-o"></i>{{ user.get_full_name|default:user.username }}
+                        </a></li>
+                        <li><a href="{% url 'logout' %}"><i class="fa fa-sign-out"></i> Logout</a></li>
+                    {% else %}
+                        <li><a href="{% url 'login' %}"><i class="fa fa-sign-in"></i> Login</a></li>
+                        <li><a href="{% url 'register' %}"><i class="fa fa-user-plus"></i> Register</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+        <!-- /TOP HEADER -->
+
+        <!-- MAIN HEADER -->
+        <div id="header">
+            <!-- container -->
+            <div class="container">
+                <!-- row -->
+                <div class="row">
+                    <!-- LOGO -->
+                    <div class="col-md-3">
+                        <div class="header-logo">
+                            <a href="{% url 'home' %}" class="logo">FOOT VOGUE
+                                <!-- <img src="{% static 'img/logo.png' %}" alt=""> -->
+                            </a>
+                        </div>
+                    </div>
+                    <!-- /LOGO -->
+
+                    <!-- SEARCH BAR -->
+                    <div class="col-md-6">
+                        <div class="header-search">
+                            <form>
+                                <select class="input-select">
+                                    <option value="0">All Categories</option>
+                                    <option value="1">Men</option>
+                                    <option value="2">Women</option>
+                                    <option value="3">Kids</option>
+                                </select>
+                                <input class="input" placeholder="Search here">
+                                <button class="search-btn">Search</button>
+                            </form>
+                        </div>
+                    </div>
+                    <!-- /SEARCH BAR -->
+
+                    <!-- ACCOUNT -->
+                    <div class="col-md-3 clearfix">
+                        <div class="header-ctn">
+                            	<!-- Wishlist -->
+								<div>
+									<a href="{% url 'wishlist_view' %}">
+										<i class="fa fa-heart-o"></i>
+										<span>Your Wishlist</span>
+										<div class="qty">{{ wishlist_items|length }}</div> <!-- Dynamic wishlist count -->
+									</a>
+								</div>
+								<!-- /Wishlist -->
+
+                            <!-- Cart -->
+                            <div class="dropdown">
+                                <a href="{% url 'cart_view' %}" class="dropdown-toggle" data-toggle="dropdown" aria-expanded="true">
+                                    <i class="fa fa-shopping-cart"></i>
+                                    <span>Your Cart</span>
+                                    <div class="qty">3</div>
+                                </a>
+                                
+                            </div>
+                            <!-- /Cart -->
+
+                            <!-- Menu Toogle -->
+                            <div class="menu-toggle">
+                                <a href="#">
+                                    <i class="fa fa-bars"></i>
+                                    <span>Menu</span>
+                                </a>
+                            </div>
+                            <!-- /Menu Toogle -->
+                        </div>
+                    </div>
+                    <!-- /ACCOUNT -->
+                </div>
+                <!-- row -->
+            </div>
+            <!-- container -->
+        </div>
+        <!-- /MAIN HEADER -->
+    </header>
+    <!-- /HEADER -->
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 sidebar">
+                <h4>My Account</h4>
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#details" data-bs-toggle="tab">My Details</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#addresses" data-bs-toggle="tab">My Address Book</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#orders" data-bs-toggle="tab">My Orders</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#settings" data-bs-toggle="tab">Account Settings</a>
+                    </li>
+                </ul>
+            </div>
+           
+
+            <!-- Content -->
+            <div class="col-md-9">
+                <div class="tab-content content">
+                    <!-- My Details Tab -->
+                    <div class="tab-pane fade {% if request.GET.tab == 'details' or not request.GET.tab %}show active{% endif %}" id="details">
+                        {% block content %}
+                         <!-- Messages -->
+                         {% if messages %}
+                         <div class="mt-3 text-center">
+                             {% for message in messages %}
+                             <p style="color: red;">{{ message }}</p>
+                             {% endfor %}
+                         </div>
+                         {% endif %}
+                        <h5>My Details</h5>
+                        <p><strong>Name:</strong> {{ user.name|default:user.username }}</p>
+                        <p><strong>Email:</strong> {{ user.email }}</p>
+                        <p><strong>Phone:</strong> {{ user.phone_number|default:'Not Provided' }}</p>
+                         <!-- Display Referral Code -->
+                        <p><strong>Referral Code:</strong> 
+                            {% if user.referral_code %}
+                                <span id="referralCode">{{ user.referral_code }}</span>
+                                <button onclick="copyReferralCode()" class="btn btn-sm btn-outline-secondary">Copy</button>
+                            {% else %}
+                                <span class="text-muted">Not Available</span>
+                            {% endif %}
+                        </p>
+
+                        <a href="{% url 'edit_profile' %}" class="btn btn-outline-primary">Edit Profile</a>
+                        {% endblock %}
+                    </div>
+
+                    <!-- My Address Book Tab -->
+                    <div class="tab-pane fade {% if request.GET.tab == 'addresses' %}show active{% endif %}" id="addresses">
+                        <h5>My Address Book</h5>
+                         <!-- Messages -->
+                         {% if messages %}
+                         <div class="mt-3 text-center">
+                             {% for message in messages %}
+                             <p style="color: red;">{{ message }}</p>
+                             {% endfor %}
+                         </div>
+                         {% endif %}
+                        {% if addresses %}
+                            <ul class="list-group">
+                                {% for address in addresses %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        {{ address.address_line1 }}, {{ address.city }}, {{ address.state }}
+                                    </div>
+                                    <div>
+                                        {% if address.id %}
+                                            <a href="{% url 'edit_address' address.id %}" class="btn btn-sm btn-outline-secondary me-2">Edit</a>
+                                            <form method="post" action="{% url 'delete_address' address.id %}" class="d-inline">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                            </form>
+                                        {% else %}
+                                            <span class="text-danger">Invalid address ID</span>
+                                        {% endif %}
+                                    </div>
+                                </li>
+                            {% endfor %}
+
+                            </ul>
+                        {% else %}
+                            <p>No addresses available. Please add one.</p>
+                        {% endif %}
+                        <a href="{% url 'manage_address' %}" class="btn btn-outline-primary mt-3">Add Address</a>
+                    </div>
+
+                    <!-- My Orders Tab -->
+                    <div class="tab-pane fade {% if active_tab == 'orders' %}show active{% endif %}" id="orders">
+                        <h5>My Orders</h5>
+
+                        <!-- View Return Requests Button -->
+                        <div class="text-end mb-3">
+                            <a href="{% url 'user_returns' %}" class="btn btn-secondary btn-sm">View Return Requests</a>
+                        </div>
+
+                         <!-- Messages -->
+                         {% if messages %}
+                         <div class="mt-3 text-center">
+                             {% for message in messages %}
+                             <p style="color: red;">{{ message }}</p>
+                             {% endfor %}
+                         </div>
+                         {% endif %}
+                        {% if orders %}
+                            <ul class="list-group">
+                                {% for order in orders %}
+                                    <li class="list-group-item">
+                                        <h6>Order #{{ order.id }}</h6>
+                                        <p><strong>Status:</strong> {{ order.status }}</p>
+                                        <p><strong>Total Amount:</strong> ₹{{ order.total_amount|floatformat:2 }}</p>
+                    
+                                        <div class="order-items">
+                                            {% for item in order.items %}
+                                                 <div class="order-item d-flex align-items-center mb-3">
+                                                <!-- Product Image -->
+                                                    <div class="order-item-image">
+                                                        {% if item.product_image %}
+                                                            <img src="{{ item.product_image }}" alt="{{ item.product_name }}" style="max-width: 100px;">
+                                                        {% else %}
+                                                            <img src="{% static 'images/placeholder.png' %}" alt="No image available" style="max-width: 100px;">
+                                                        {% endif %}
+                                                    </div>
+                                
+                                                    <!-- Product Details -->
+                                                    <div class="order-item-details ml-3">
+                                                        <p><strong>{{ item.product_name }}</strong></p>
+                                                        <p>{{ item.color }} - {{ item.size }}</p>
+                                                        <p>Quantity: {{ item.quantity }}</p>
+                                                        <p>Price: ₹{{ item.price|floatformat:2 }}</p>
+
+                                                        <!-- Return Button for This Specific Item -->
+                                                        {% if order.status == 'Completed' %}
+                                                        <div class="mt-2">
+                                                            <form method="GET" action="{% url 'request_return' item.id %}">
+                                                                <button type="submit" class="btn btn-warning btn-sm">
+                                                                    Return {{ item.product_name }} (Size: {{ item.size }})
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+
+                                        <!-- Retry Payment Button (for Failed Orders) -->
+                                        {% if order.payment_status == 'Pending' %}
+                                            {% if order.payment_method == 'razorpay' or order.payment_method == 'wallet' %}
+                                                <div class="mt-2">
+                                                    <a href="{% url 'retry_payment' order.id %}" class="btn btn-warning btn-sm">
+                                                        Retry Payment
+                                                    </a>
+                                                </div>
+                                            {% endif %}
+                                        {% endif %}
+
+
+                                       <!-- Cancel Order Button -->
+                                        {% if order.status != 'Cancelled' and order.status != 'Completed' and order.status != 'Delivered' %}
+                                        <form method="POST" action="{% url 'user_cancel_order' order.id %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="order_id" value="{{ order.id }}">
+                                            <button type="submit" name="cancel_order" class="btn btn-danger btn-sm">Cancel Order</button>
+                                        </form>
+                                        {% endif %}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p>No orders found.</p>
+                        {% endif %}
+                    </div>
+
+                    
+                    <!-- Account Settings Tab -->
+                    <div class="tab-pane fade {% if request.GET.tab == 'settings' %}show active{% endif %}" id="settings">
+                        <h5>Account Settings</h5>
+                        <p>Manage your account settings, privacy, and security options here.</p>
+                        <a href="{% url 'change_password' %}" class="btn btn-outline-primary">Change Password</a>
+                        <a href="{% url 'password_reset' %}" class="btn btn-outline-primary">Forgot your password?</a>
+                        <!-- Messages -->
+                        {% if messages %}
+                        <div class="mt-3 text-center">
+                            {% for message in messages %}
+                            <p style="color: red;">{{ message }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2025 Foot Vogue. All rights reserved.</p>
+    </footer>
+
+    <!-- Add Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
+<script>
+    function copyReferralCode() {
+        var referralCode = document.getElementById("referralCode").innerText;
+        navigator.clipboard.writeText(referralCode).then(() => {
+            alert("Referral code copied!");
+        }).catch(err => {
+            console.error("Failed to copy: ", err);
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        var retryButtons = document.querySelectorAll(".retry-payment");
+
+        retryButtons.forEach(function(button) {
+            button.addEventListener("click", function() {
+                var orderId = this.getAttribute("data-order-id");
+                var razorpayOrderId = this.getAttribute("data-razorpay-order-id");
+                var amount = this.getAttribute("data-amount") * 100; // Convert to paise
+
+                initiateRazorpay(orderId, razorpayOrderId, amount);
+            });
+        });
+
+        function initiateRazorpay(orderId, razorpayOrderId, amount) {
+            var options = {
+                "key": "{{ razorpay_key_id }}",
+                "amount": amount,
+                "currency": "INR",
+                "name": "Foot Vogue",
+                "order_id": razorpayOrderId,
+                "handler": function(response) {
+                    // Send payment details to backend for verification
+                    fetch("/update-payment-status/", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": getCSRFToken() // Fetch CSRF token dynamically
+                        },
+                        body: JSON.stringify({
+                            order_id: orderId,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_signature: response.razorpay_signature
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert("Payment successful!");
+                            location.reload(); // Reload to update order status
+                        } else {
+                            alert("Payment verification failed!");
+                        }
+                    });
+                },
+                "theme": {
+                    "color": "#3399cc"
+                }
+            };
+
+            var rzp1 = new Razorpay(options);
+            rzp1.on('payment.failed', function(response) {
+                alert("Payment failed: " + response.error.description);
+            });
+
+            rzp1.open();
+        }
+
+        // Function to get CSRF token dynamically
+        function getCSRFToken() {
+            return document.querySelector("[name=csrfmiddlewaretoken]").value;
+        }
+    });
+
+</script>

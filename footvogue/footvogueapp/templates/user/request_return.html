@@ -1,0 +1,80 @@
+{% extends "user/home.html" %}
+{% block content %}
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8 col-sm-10">
+            <div class="card shadow-lg border-0"><br>
+                <div class="card-header bg-warning text-white text-center">
+                    <h4 class="mb-0">Request Return</h4>
+                </div><br>
+
+                <div class="card-body">
+                    <h5 class="text-center mb-3">{{ order_item.product_variant.product.name }}</h5>
+                    
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Select a Reason for Return:</label>
+                            <select name="reason" id="reason" class="form-select" >
+                                <option value="">-- Choose a reason --</option>
+                                {% for reason in reasons %}
+                                    <option value="{{ reason.id }}">{{ reason.reason_text }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="additional_notes" class="form-label">Additional Notes (Optional):</label>
+                            <textarea name="additional_notes" id="additional_notes" rows="4" class="form-control" placeholder="Provide more details if needed..."></textarea>
+                        </div><br>
+
+                        <div class="text-center">
+                            <button type="submit" class="btn btn-warning w-100">Submit Return Request</button>
+                        </div>
+                    </form>
+                    <br>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+<style>
+/* Add spacing from the header and footer */
+.container {
+    margin-top: 80px;  /* Space from the top */
+    margin-bottom: 80px; /* Space from the bottom */
+}
+
+/* Center the card properly */
+.card {
+    border-radius: 12px; /* Smooth rounded corners */
+}
+
+/* Improve form spacing */
+.card-body {
+    padding: 30px;
+}
+
+/* Space for form fields */
+.form-select, .form-control {
+    padding: 10px;
+    font-size: 16px;
+}
+
+/* Enhance button */
+.btn-warning {
+    padding: 12px;
+    font-size: 18px;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.btn-warning:hover {
+    background-color: #e0a800;
+}
+</style>

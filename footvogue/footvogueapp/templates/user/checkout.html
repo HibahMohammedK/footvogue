@@ -1,0 +1,409 @@
+{% extends "user/home.html" %}
+{% load static %}
+{% block content %}
+<!-- SECTION -->
+    <div class="container">
+        <div class="row">
+            <!-- Billing Address -->
+            <div class="col-md-7">
+                <div class="billing-details">
+                    <div class="section-title">
+                        <h3 class="title">Billing Address</h3>
+                    </div>
+
+                    <!-- Address Selection (Existing Addresses) -->
+                    <form method="POST" action="{% url 'checkout' %}">
+                        {% csrf_token %}
+                        
+                        <div class="form-group">
+                            <label for="address_select">Select an Address</label>
+                            <select class="input" name="address_select" id="address_select" onchange="fillAddressFields()">
+                                <option value="" disabled selected>Select an Address</option>
+                                {% for address in user.addresses.all %}
+                                    <option value="{{ address.id }}" 
+                                        data-line1="{{ address.address_line1 }}" 
+                                        data-line2="{{ address.address_line2 }}" 
+                                        data-city="{{ address.city }}" 
+                                        data-state="{{ address.state }}" 
+                                        data-postal="{{ address.postal_code }}" 
+                                        data-country="{{ address.country }}">
+                                        {{ address.address_line1 }}, {{ address.city }}
+                                    </option>
+                                {% empty %}
+                                    <option value="" disabled>No saved addresses available</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- New Address Form (Hidden if an address is selected) -->
+                        <div class="form-group">
+                            <label for="address_line1">Address Line 1</label>
+                            <input class="input" type="text" name="address_line1" id="address_line1" placeholder="Address Line 1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="address_line2">Address Line 2</label>
+                            <input class="input" type="text" name="address_line2" id="address_line2" placeholder="Address Line 2 (Optional)">
+                        </div>
+                        <div class="form-group">
+                            <label for="city">City</label>
+                            <input class="input" type="text" name="city" id="city" placeholder="City" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="state">State</label>
+                            <input class="input" type="text" name="state" id="state" placeholder="State" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="postal_code">Postal Code</label>
+                            <input class="input" type="text" name="postal_code" id="postal_code" placeholder="Postal Code" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="country">Country</label>
+                            <input class="input" type="text" name="country" id="country" placeholder="Country" required>
+                        </div>
+
+                        <div class="form-group">
+                            <input type="checkbox" name="use_default" id="use_default" value="true">
+                            <label for="use_default">Use as Default Address</label>
+                        </div>
+
+                        <button type="submit" class="primary-btn">Save Address & continue shopping</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Order Summary -->
+            <div class="col-md-5 order-details">
+                <div class="section-title text-center">
+                    <h3 class="title">Your Order</h3>
+                </div>
+                <div class="order-summary">
+                    <div class="order-col">
+                        <div><strong>PRODUCT</strong></div>
+                        <div><strong>TOTAL</strong></div>
+                    </div>
+                    <div class="order-products">
+                        {% for item in cart_items %}
+                        <div class="order-col d-flex align-items-center">
+                            <div class="cart-item-image">
+                                {% if item.image_url %}
+                                    <img src="{{ item.image_url }}" alt="{{ item.product_name }}">
+                                {% else %}
+                                    <img src="{% static 'images/placeholder.png' %}" alt="No image available">
+                                {% endif %}
+                            </div>
+                            <div>{{ item.quantity }}x {{ item.product_variant.product.name }}</div>
+                            <div>₹{{ item.total_price|floatformat:2 }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="order-col">
+                        <div><strong>Apply Coupon</strong></div>
+                        <div>
+                            <input type="text" id="coupon_code" placeholder="Enter coupon code">
+                            <button type="button" id="apply_coupon_btn" onclick="applyCoupon()" class="primary-btn">Apply</button>
+                        </div>
+                        <p id="coupon_message" style="color: red; display: none;"></p>
+                    </div>
+                    <div class="order-col">
+                        <div>Shipping</div>
+                        <div><strong>FREE</strong></div>
+                    </div>
+                    <div class="order-col">
+                        <div><strong>Subtotal</strong></div>
+                        <div><strong id="subtotal">₹{{ total_price|floatformat:2 }}</strong></div>
+                    </div>
+            
+                    <div class="order-col" id="discount-row" style="display: none;">
+                        <div>Coupon Discount</div>
+                        <div><strong id="discount-amount">-₹0.00</strong></div>
+                    </div>
+            
+                    <div class="order-col">
+                        <div><strong>TOTAL</strong></div>
+                        <div><strong class="order-total" id="final-total">₹{{ total_price|floatformat:2 }}</strong></div>
+                    </div>
+                </div>
+            
+                <!-- Hidden input fields to store discount and final price -->
+                <input type="hidden" id="discount_value" name="discount_value" value="0">
+                <input type="hidden" id="final_price" name="final_price" value="{{ total_price|floatformat:2 }}">
+
+                <!-- Hidden Modal for Payment Failure -->
+                <div id="payment-failed-modal" class="modal">
+                    <div class="modal-content">
+                        <span class="close" onclick="closeModal()">&times;</span>
+                        <h2>Payment Failed</h2>
+                        <p id="error-message"></p>
+                        <button id="retry-payment-button">Retry Payment</button>
+                        <button onclick="closeModal()">Close</button>
+                    </div>
+                </div>
+                
+            
+                <form id="checkout-form" method="POST" action="{% url 'place_order' %}">
+                    {% csrf_token %}
+                    
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-razorpay" value="razorpay">
+                        <label for="payment-razorpay"><span></span>Razorpay</label>
+                    </div>
+                    
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-4" value="cod">
+                        <label for="payment-4"><span></span>Cash on Delivery</label>
+                    </div>
+                    
+                    <!-- Wallet Payment Option -->
+                    <div class="input-radio">
+                        <input type="radio" name="payment_method" id="payment-wallet" value="wallet">
+                        <label for="payment-wallet">
+                            <span></span>Pay with Wallet (Balance: ₹{{ request.user.wallet.balance }})
+                        </label>
+                    </div>
+                
+                    <!-- Razorpay Payment Button (Initially Hidden) -->
+                    <button id="razorpay-button" class="btn btn-primary" style="display: none;">Pay with Razorpay</button>
+                
+                    <!-- Hidden Form Inputs -->
+                    <input type="hidden" id="razorpay_payment_id" name="razorpay_payment_id">
+                    <input type="hidden" id="razorpay_order_id" name="razorpay_order_id" value="{{ razorpay_order_id }}">
+                    <input type="hidden" id="razorpay_signature" name="razorpay_signature">
+                
+                    <!-- ✅ Hidden input for discount -->
+                    <input type="hidden" id="discount_amount_input" name="discount" value="0">
+                    
+                    <!-- ✅ Hidden input for final price after discount -->
+                    <input type="hidden" id="final_price" name="final_price" value="{{ total_price }}">
+                
+                    <button type="submit" class="primary-btn order-submit">Place Order</button>
+                </form>
+                
+            </div>            
+        </div>
+    </div>
+</div>
+
+<style>
+    .cart-item-image img {
+        max-width: 60px;
+        max-height: 60px;
+        object-fit: cover;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .order-col {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+  
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-content {
+        background-color: white;
+        margin: 15% auto;
+        padding: 20px;
+        border-radius: 8px;
+        width: 400px;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-content h2 {
+        color: red;
+    }
+
+    .close-btn {
+        background-color: #ff4d4d;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    .close-btn:hover {
+        background-color: #cc0000;
+    }
+   
+</style>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<script>
+    function fillAddressFields() {
+        const select = document.getElementById("address_select");
+        const selectedOption = select.options[select.selectedIndex];
+        if (selectedOption.value) {
+            document.getElementById("address_line1").value = selectedOption.getAttribute("data-line1");
+            document.getElementById("address_line2").value = selectedOption.getAttribute("data-line2");
+            document.getElementById("city").value = selectedOption.getAttribute("data-city");
+            document.getElementById("state").value = selectedOption.getAttribute("data-state");
+            document.getElementById("postal_code").value = selectedOption.getAttribute("data-postal");
+            document.getElementById("country").value = selectedOption.getAttribute("data-country");
+        }
+    }
+    
+    function applyCoupon() {
+        let couponCode = document.getElementById("coupon_code").value;
+        let orderTotal = parseFloat("{{ total_price }}");
+
+        fetch("{% url 'validate_coupon' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({ coupon_code: couponCode, order_total: orderTotal })
+        })
+        .then(response => response.json())
+        .then(data => {
+            let messageBox = document.getElementById("coupon_message");
+
+            if (data.error) {
+                messageBox.textContent = data.error;
+                messageBox.style.color = "red";
+                messageBox.style.display = "block";
+            } else {
+                let discount = parseFloat(data.discount);
+                let newTotal = orderTotal - discount;
+
+                // ✅ Update discount and final total display
+                document.getElementById("discount-amount").textContent = "-₹" + discount.toFixed(2);
+                document.getElementById("final-total").textContent = "₹" + newTotal.toFixed(2);
+                document.getElementById("discount-row").style.display = "flex";
+
+                // ✅ Update hidden input fields
+                document.getElementById("discount_amount_input").value = discount;
+                document.getElementById("final_price").value = newTotal.toFixed(2);
+
+                // ✅ Update success message
+                messageBox.textContent = "Coupon applied successfully!";
+                messageBox.style.color = "green";
+                messageBox.style.display = "block";
+
+                // ✅ Update Razorpay order ID and amount
+                document.getElementById("razorpay_order_id").value = data.razorpay_order_id;
+                options.amount = newTotal * 100;  // Convert to paise
+            }
+        })
+        .catch(error => {
+            console.error("Error:", error);
+        });
+    }
+
+
+            
+        document.addEventListener("DOMContentLoaded", function() {
+        var razorpayRadio = document.getElementById("payment-razorpay");
+        var codRadio = document.getElementById("payment-4");
+        var razorpayButton = document.getElementById("razorpay-button");
+        var retryButton = document.getElementById("retry-payment-button"); // Retry Button in Modal
+        var checkoutForm = document.getElementById("checkout-form");
+        var modal = document.getElementById("payment-failed-modal");
+        var closeModalButton = document.querySelector(".close");
+
+        // Toggle Razorpay button visibility
+        razorpayRadio.addEventListener("change", function() {
+            razorpayButton.style.display = "block";
+        });
+
+        codRadio.addEventListener("change", function() {
+            razorpayButton.style.display = "none";
+        });
+
+        // Function to initiate Razorpay payment
+        function initiateRazorpay() {
+            var options = {
+                "key": "{{ razorpay_key_id }}",
+                "amount": document.getElementById("final_price").value * 100,
+                "currency": "INR",
+                "name": "Foot Vogue",
+                "order_id": document.getElementById("razorpay_order_id").value,
+                "handler": function(response) {
+                    // Call verify_payment API with payment details
+                    fetch("/verify_payment/", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value
+                        },
+                        body: JSON.stringify({
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_signature: response.razorpay_signature,
+                            order_id: document.getElementById("order_id").value
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            window.location.href = "/payment_success/";
+                        } else {
+                            showModal("Payment verification failed. Please try again.");
+                        }
+                    })
+                    .catch(error => {
+                        showModal("An error occurred. Please try again.");
+                    });
+                },
+                "theme": {
+                    "color": "#3399cc"
+                }
+            };
+
+            var rzp1 = new Razorpay(options);
+
+            rzp1.on('payment.failed', function(response) {
+                showModal("Payment failed. Please try again.");
+            });
+
+            rzp1.open();
+        }
+
+        // Razorpay payment button click
+        razorpayButton.onclick = function(e) {
+            e.preventDefault();
+            initiateRazorpay();
+        };
+
+        // Show payment failed modal
+        function showModal(errorMsg) {
+            document.getElementById("error-message").innerText = errorMsg;
+            modal.style.display = "block";
+        }
+
+        // Close modal
+        function closeModal() {
+            modal.style.display = "none";
+        }
+
+        // Close modal events
+        closeModalButton.addEventListener("click", closeModal);
+        window.addEventListener("click", function(event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        // Retry payment
+        retryButton.addEventListener("click", function() {
+            closeModal();
+            initiateRazorpay();
+        });
+
+        // Make closeModal globally available
+        window.closeModal = closeModal;
+    });
+</script>
+
+{% endblock %}

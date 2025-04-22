@@ -1,0 +1,616 @@
+{% extends "user/home.html" %}
+{% load custom_tags %}
+{% load static %}
+
+{% block content %}
+
+		<!-- BREADCRUMB -->
+<div id="breadcrumb" class="section">
+    <!-- container -->
+    <div class="container">
+        <!-- row -->
+        <div class="row">
+            <div class="col-md-12">
+                <ul class="breadcrumb-tree">
+                    <li><a href="#">Home</a></li>
+                    {% for category in categories %}
+                        <li><a href="#">{{ category.category_name }}</a></li>  <!-- Adjust 'category_name' as per your model -->
+                    {% endfor %}
+                    <li class="active">{{ product.name }}</li>  <!-- Display the product name -->
+                </ul>
+            </div>
+        </div>
+        <!-- /row -->
+    </div>
+    <!-- /container -->
+</div>
+<!-- /BREADCRUMB -->
+
+
+		<!-- SECTION -->
+		<div class="section">
+			<!-- container -->
+			<div class="container">
+				<!-- row -->
+				<div class="row">
+                  <!-- Product main img -->
+                    <div class="col-md-5 col-md-push-2">
+                        <div id="product-main-img">
+                            {% for image in selected_variant.productimage_set.all %}
+                                <div class="product-preview">
+                                    <img src="{{ image.image_url.url }}" alt="{{ product.name }} - {{ selected_variant.color.color_name }} - {{ selected_variant.size.size_name }}">
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Product Thumbnail Images -->
+                    <div class="col-md-2 col-md-pull-5">
+                        <div id="product-imgs">
+                            {% for image in selected_variant.productimage_set.all %}
+                                <div class="product-preview">
+                                    <img src="{{ image.image_url.url }}" alt="{{ product.name }} - {{ selected_variant.color.color_name }} - {{ selected_variant.size.size_name }}">
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <!-- /Product thumb imgs -->
+
+					<!-- Product Details -->
+                    <div class="col-md-5">
+                        <div class="product-details">
+                            <!-- Product Name -->
+                            <h2 class="product-name">{{ product.name }}</h2>
+
+                            <!-- Product Rating -->
+                            <div class="product-rating">
+                                <div class="stars">
+                                    {% for _ in filled_stars_range %}
+                                        <i class="fa fa-star"></i>
+                                    {% endfor %}
+                                    {% for _ in empty_stars_range %}
+                                        <i class="fa fa-star-o"></i>
+                                    {% endfor %}
+                                </div>
+                                <a class="review-link" href="#reviews">({{ total_ratings }} Reviews)</a>
+                            </div>
+
+                            <!-- Price and Stock -->
+                            <div class="price-section">
+                                {% if best_offer %}
+                                    <p><strong>🎉 Special Offer: {{ best_offer.discount_value }}% OFF!</strong></p>
+                                        <h3 class="product-price">
+                                            <del class="old-price">₹{{ selected_variant.price }}</del>
+                                            <span class="discounted-price">₹{{ discounted_price|floatformat:2 }}</span>
+                                        </h3>
+                                {% else %}
+                                    <h3 class="product-price">₹{{ selected_variant.price }}</h3>
+                                {% endif %}
+                                <p class="stock-status">
+                                {% if selected_variant.stock_quantity > 0 %}
+                                    In Stock ({{ selected_variant.stock_quantity }} available)
+                                {% else %}
+                                    <span class="out-of-stock">Out of Stock</span>
+                                {% endif %}
+                                </p>
+                            </div>
+
+                            <!-- Product Description -->
+                            <div class="product-description">
+                                <p>{{ product.description }}</p>
+                            </div>
+
+                            <!-- Product Variants -->
+                            <div class="product-options">
+                                <!-- Product Details Template -->
+                                <form method="post" action="{% url 'add_to_cart' 0 %}" id="add-to-cart-form">
+                                    {% csrf_token %}
+                                    <label>
+                                        Size
+                                        <select class="input-select" name="size" id="size-select" onchange="updateVariant()">
+                                            <option value="">Select Size</option>
+                                            {% for size in unique_sizes %}
+                                                <option value="{{ size.id }}" {% if size.id == selected_variant.size.id %}selected{% endif %}>
+                                                    {{ size.size_name }} ({{ size.variant_count }})
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </label>
+                                    <input type="hidden" name="variant_id" id="variant-id" value="{{ selected_variant.id }}">
+                                    <input type="hidden" id="variant-map" value='{{ variant_map|safe }}'>
+                                </form>
+                            </div>
+                            
+
+                         <!-- Add to Cart -->
+                            <div class="add-to-cart">
+                                <form action="{% url 'add_to_cart' selected_variant.id %}" method="POST">
+                                    {% csrf_token %}
+                                    
+                                    <!-- Quantity Input -->
+                                    <div class="qty-label">
+                                        Qty
+                                        <div class="input-number">
+                                            <input type="number" id="qty" name="quantity" value="1" min="1">
+                                            <span class="qty-up">+</span>
+                                            <span class="qty-down">-</span>
+                                        </div>
+                                    </div>
+
+                                    <input type="hidden" name="variant_id" value="{{ selected_variant.id }}">
+
+                                    <button type="submit" class="add-to-cart-btn"  onclick="return updateFormAction()">
+                                        <i class="fa fa-shopping-cart"></i> Add to Cart
+                                    </button>
+                                </form>
+                            </div>
+
+                            {% if best_offer %}
+                                <p><strong>🎉 Special Offer: {{ best_offer.discount_value }}% OFF!</strong></p>
+                                <p><del>₹{{ original_price }}</del> <strong>₹{{ discounted_price|floatformat:2 }}</strong></p>
+                            {% else %}
+                                <p>Price: ₹{{ original_price }}</p>
+                            {% endif %}
+
+                            {% if product_offer %}
+                            <div class="offer-section">
+                                <p>🔥 Product Offer: <strong>{{ product_offer.discount }}% OFF</strong> (Valid until {{ product_offer.end_date|date:"M d, Y" }})</p>
+                            </div>
+                            {% endif %}
+
+                            {% if category_offer %}
+                            <div class="offer-section">
+                                <p>💥 Category Offer: <strong>{{ category_offer.discount }}% OFF</strong> 
+                                    on all "{{ category_offer.category.category_name }}" products! 
+                                    (Valid until {{ category_offer.end_date|date:"M d, Y" }})
+                                </p>
+                            </div>
+                            {% endif %}
+
+
+
+
+                            <!-- Wishlist and Categories -->
+                            <ul class="product-btns">
+                                <li>
+                                    {% if selected_variant %}
+                                        <a href="{% url 'add_to_wishlist' selected_variant.id %}">
+                                            <i class="fa fa-heart-o"></i> Add to Wishlist
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">No variants available</span>
+                                    {% endif %}
+                                </li>
+                            </ul>
+                           <!-- Product Variant Colors -->
+                            <div class="product-options">
+                                <label>Available Colors:</label>
+                                <div class="color-options" style="display: flex; flex-wrap: nowrap; overflow-x: auto;">
+                                    {% for variant in unique_color_variants %}
+                                        <a 
+                                            href="{% url 'product_details_variant' product.id variant.id %}" 
+                                            class="color-swatch" 
+                                            style="background-image: url('{{ variant.productimage_set.first.image_url.url }}'); 
+                                                background-size: cover; 
+                                                background-position: center; 
+                                                width: 50px; height: 50px; 
+                                                margin-right: 10px; display: inline-block; border-radius: 50%;">
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <!-- Share Links -->
+                            <ul class="product-links">
+                                <li>Share:</li>
+                                <li><a href="#"><i class="fa fa-facebook"></i></a></li>
+                                <li><a href="#"><i class="fa fa-twitter"></i></a></li>
+                                <li><a href="#"><i class="fa fa-google-plus"></i></a></li>
+                                <li><a href="#"><i class="fa fa-envelope"></i></a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <!-- /Product Details -->
+                   
+					<!-- Product Tab -->
+                    <div class="col-md-12">
+                        <div id="product-tab">
+                            <!-- Product Tab Navigation -->
+                            <ul class="tab-nav">
+                                <li class="active"><a data-toggle="tab" href="#tab1">Description</a></li>
+                                <li><a data-toggle="tab" href="#tab2">Details</a></li>
+                                <li><a data-toggle="tab" href="#tab3">Reviews ({{ reviews.count }})</a></li>
+                            </ul>
+                            <!-- /Product Tab Navigation -->
+
+                            <!-- Product Tab Content -->
+                            <div class="tab-content">
+                                <!-- Tab 1: Description -->
+                                <div id="tab1" class="tab-pane fade in active">
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <p>{{ product.description }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /Tab 1: Description -->
+
+                                <!-- Tab 2: Details -->
+                                <div id="tab2" class="tab-pane fade in">
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <p>{{ product.details }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /Tab 2: Details -->
+
+                                <!-- Tab 3: Reviews -->
+                                <div id="tab3" class="tab-pane fade in">
+                                    <div class="row">
+                                        <!-- Rating -->
+                                        <div class="col-md-3">
+                                            <div id="rating">
+                                                <ul class="rating">
+                                                    {% for rating in rating_breakdown %}
+                                                        <li>
+                                                            <div class="rating-stars">
+                                                                <!-- For filled stars -->
+                                                                {% for _ in rating.rating|times %}
+                                                                    <i class="fa fa-star"></i>
+                                                                {% endfor %}
+                                                                <!-- For empty stars -->
+                                                                {% for _ in 5|subtract:rating.rating|times %}
+                                                                    <i class="fa fa-star-o"></i>
+                                                                {% endfor %}
+                                                            </div>
+                                                            <span>{{ rating.percentage }}%</span>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <!-- /Rating -->
+
+                                         <!-- Reviews -->
+                                        <div class="col-md-6">
+                                            <div id="reviews">
+                                                <ul class="reviews">
+                                                    {% for review in reviews %}
+                                                        <li>
+                                                            <div class="review-heading">
+                                                                <h5 class="name">{{ review.user.username }}</h5>
+                                                                <p class="date">{{ review.created_at|date:"d M Y, H:i A" }}</p>
+                                                                <div class="review-rating">
+                                                                    <!-- Handle missing rating_value safely -->
+                                                                    {% if review.rating_value %}
+                                                                        <!-- For filled stars -->
+                                                                        {% for _ in review.rating_value|times %}
+                                                                            <i class="fa fa-star"></i>
+                                                                        {% endfor %}
+                                                                        <!-- For empty stars -->
+                                                                        {% for _ in 5|subtract:review.rating_value|times %}
+                                                                            <i class="fa fa-star-o"></i>
+                                                                        {% endfor %}
+                                                                    {% else %}
+                                                                        <i class="fa fa-star-o"></i> <!-- Default to empty star if no rating -->
+                                                                    {% endif %}
+                                                                </div>
+                                                            </div>
+                                                            <div class="review-body">
+                                                                <p>{{ review.review_text }}</p>
+                                                            </div>
+                                                        </li>
+                                                    {% empty %}
+                                                        <li>No reviews yet. Be the first to review this product!</li>
+                                                    {% endfor %}
+                                                </ul>
+
+                                                <!-- Pagination -->
+                                                <ul class="reviews-pagination">
+                                                    {% for page_num in reviews.paginator.page_range %}
+                                                        <li class="{% if reviews.number == page_num %}active{% endif %}">
+                                                            <a href="?page={{ page_num }}">{{ page_num }}</a>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <!-- /Reviews -->
+
+                                        <!-- Review Form -->
+                                        <div class="col-md-3">
+                                            <div id="review-form">
+                                                <form method="POST" id="review-form" action="{% url 'submit_review_and_rating' product.id %}" class="review-form">
+                                                    {% csrf_token %}
+                                                    
+                                                    <!-- Name (optional, if needed) -->
+                                                    <input class="input" type="text" name="name" placeholder="Your Name" value="{{ request.user.username }}" readonly>
+
+                                                    <!-- Email (optional, if needed) -->
+                                                    <input class="input" type="email" name="email" placeholder="Your Email" value="{{ request.user.email }}" readonly>
+
+                                                    <!-- Review Text Area -->
+                                                    <textarea class="input" name="review_text" placeholder="Your Review" required></textarea>
+
+                                                    <!-- Rating Section -->
+                                                    <div class="input-rating">
+                                                        <span>Your Rating: </span>
+                                                        <div class="stars">
+                                                            <input id="star5" name="rating" value="5" type="radio"><label for="star5"></label>
+                                                            <input id="star4" name="rating" value="4" type="radio"><label for="star4"></label>
+                                                            <input id="star3" name="rating" value="3" type="radio"><label for="star3"></label>
+                                                            <input id="star2" name="rating" value="2" type="radio"><label for="star2"></label>
+                                                            <input id="star1" name="rating" value="1" type="radio"><label for="star1"></label>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Submit Button -->
+                                                    <button class="primary-btn" type="submit">Submit</button>
+                                                </form>
+
+                                                <!-- Message Display -->
+                                                <div id="review-message" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <!-- /Review Form -->
+                                    </div>
+                                </div>
+                                <!-- /Tab 3: Reviews -->
+                            </div>
+                            <!-- /Product Tab Content -->
+                        </div>
+                    </div>
+				<!-- /row -->
+			</div>
+			<!-- /container -->
+		</div>
+		<!-- /SECTION -->
+
+		<!-- Section -->
+<!-- Section -->
+<div class="section">
+    <!-- container -->
+    <div class="container">
+        <!-- row -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="section-title text-center">
+            <h3 class="title">Related Products</h3>
+        </div>
+    </div>
+
+    <!-- Loop through the related products -->
+    {% for related_product in related_products %}
+    <div class="col-md-3 col-xs-6">
+        <div class="product">
+            <a href="{% url 'product_details' product_id=related_product.id %}" style="text-decoration: none; color: inherit;">
+                <div class="product-img">
+                    <!-- Display the product image -->
+                    {% with related_product.productvariant_set.first.productimage_set.first as product_image %}
+                        {% if product_image %}
+                            <img src="{{ product_image.image_url.url }}" alt="{{ related_product.name }}">
+                        {% else %}
+                            <img src="{% static 'images/no-image-available.png' %}" alt="No Image">
+                        {% endif %}
+                    {% endwith %}
+                    <div class="product-label">
+                        {% if related_product.discount %}
+                            <span class="sale">-{{ related_product.discount }}%</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="product-body">
+                    <!-- Product category -->
+                    <p class="product-category">{{ related_product.category.category_name }}</p>
+                    <!-- Product name -->
+                    <h3 class="product-name">
+                        {{ related_product.name }}
+                    </h3>
+                    <!-- Product price -->
+                    <h4 class="product-price">
+                        {% with related_product.productvariant_set.first as variant %}
+                            {% if variant %}
+                                ₹{{ variant.price }}
+                                {% if variant.old_price %}
+                                    <del class="product-old-price">₹{{ variant.old_price }}</del>
+                                {% endif %}
+                            {% else %}
+                                Price not available
+                            {% endif %}
+                        {% endwith %}
+                    </h4>
+                    <!-- Product rating -->
+                    <div class="product-rating">
+                        {% for _ in related_product.avg_rating|default:0|times %}
+                            <i class="fa fa-star"></i>
+                        {% endfor %}
+                        {% for _ in 5|subtract:related_product.avg_rating|default:0|times %}
+                            <i class="fa fa-star-o"></i>
+                        {% endfor %}
+                    </div>
+                    <div class="product-btns">
+                        <a href="{% url 'add_to_wishlist' product.id %}"><button class="add-to-wishlist">
+                            <i class="fa fa-heart-o"></i><span class="tooltipp">add to wishlist</span>
+                        </button></a>
+                        <button class="add-to-compare">
+                            <i class="fa fa-exchange"></i><span class="tooltipp">add to compare</span>
+                        </button>
+                        <button class="quick-view">
+                            <i class="fa fa-eye"></i><span class="tooltipp">quick view</span>
+                        </button>
+                    </div>
+                </div>
+            </a>
+            <div class="add-to-cart">
+                <a href="#"><button class="add-to-cart-btn">
+                    <i class="fa fa-shopping-cart"></i> add to cart
+                </button></a>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <p class="text-center">No related products found.</p>
+    {% endfor %}
+</div>
+<!-- /row -->
+
+    </div>
+    <!-- /container -->
+</div>
+<!-- /Section -->
+
+
+
+		<!-- NEWSLETTER -->
+		<div id="newsletter" class="section">
+			<!-- container -->
+			<div class="container">
+				<!-- row -->
+				<div class="row">
+					<div class="col-md-12">
+						<div class="newsletter">
+							<p>Sign Up for the <strong>NEWSLETTER</strong></p>
+							<form>
+								<input class="input" type="email" placeholder="Enter Your Email">
+								<button class="newsletter-btn"><i class="fa fa-envelope"></i> Subscribe</button>
+							</form>
+							<ul class="newsletter-follow">
+								<li>
+									<a href="#"><i class="fa fa-facebook"></i></a>
+								</li>
+								<li>
+									<a href="#"><i class="fa fa-twitter"></i></a>
+								</li>
+								<li>
+									<a href="#"><i class="fa fa-instagram"></i></a>
+								</li>
+								<li>
+									<a href="#"><i class="fa fa-pinterest"></i></a>
+								</li>
+							</ul>
+						</div>
+					</div>
+				</div>
+				<!-- /row -->
+			</div>
+			<!-- /container -->
+		</div>
+		<!-- /NEWSLETTER -->
+{% endblock %}
+
+<style>
+    .offer-banner {
+    background-color: #ff9800;
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.offer-section {
+    background-color: #e1f5fe;
+    color: #0277bd;
+    padding: 8px;
+    border-radius: 5px;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+.input-select {
+    width: 200px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin: 5px 0;
+}
+
+.input-select option[disabled] {
+    color: #999;
+}
+
+</style>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Get the review form
+        const reviewForm = document.getElementById('review-form');
+        
+        reviewForm.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent the form from submitting traditionally
+
+            // Use FormData to capture the form data
+            const formData = new FormData(reviewForm);
+
+            // Send the form data via AJAX
+            fetch(reviewForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name="csrfmiddlewaretoken"]').value,
+                },
+            })
+            .then(response => response.json())  // Parse the JSON response
+            .then(data => {
+                // Get the message container
+                const messageContainer = document.getElementById('review-message');
+
+                if (data.success) {
+                    // Show success message
+                    messageContainer.style.display = 'block';
+                    messageContainer.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                } else {
+                    // Show error messages
+                    messageContainer.style.display = 'block';
+                    let errorMessages = '';
+                    for (let field in data.errors) {
+                        errorMessages += `<p><strong>${field}</strong>: ${data.errors[field].join(', ')}</p>`;
+                    }
+                    messageContainer.innerHTML = `<div class="alert alert-danger">${errorMessages}</div>`;
+                }
+            })
+            .catch(error => {
+                // Show a generic error message if the AJAX request fails
+                const messageContainer = document.getElementById('review-message');
+                messageContainer.style.display = 'block';
+                messageContainer.innerHTML = '<div class="alert alert-danger">Something went wrong. Please try again later.</div>';
+            });
+        });
+    }); 
+
+    function updateVariant() {
+    var sizeSelect = document.getElementById("size-select");
+    var selectedSizeId = sizeSelect.value;
+    
+    var variantMapInput = document.getElementById("variant-map");
+    var variantMap = JSON.parse(variantMapInput.value);
+    
+    var variantIdInput = document.getElementById("variant-id");
+
+    console.log("Selected Size ID:", selectedSizeId);
+    console.log("Variant Map:", variantMap);
+    
+    if (variantMap[selectedSizeId]) {
+        variantIdInput.value = variantMap[selectedSizeId];
+        console.log("Updated Variant ID:", variantIdInput.value);
+    } else {
+        console.warn("No matching variant found for selected size!");
+    }
+}
+
+function updateFormAction() {
+    updateVariant(); // Ensure the variant ID updates
+    var form = document.getElementById("add-to-cart-form");
+    var variantId = document.getElementById("variant-id").value;
+
+    if (variantId) {
+        form.action = "/add_to_cart/" + variantId + "/";
+        console.log("Updated Form Action:", form.action);
+        return true; // Allow submission
+    } else {
+        alert("Please select a size before adding to cart.");
+        return false; // Prevent submission
+    }
+}
+
+</script>

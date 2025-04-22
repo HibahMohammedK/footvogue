@@ -1,0 +1,62 @@
+{% extends "admin/admin_dash.html" %}
+
+{% block content %}
+<div class="card mt-4">
+    <div class="card-header  text-white">
+        <h2>User Management</h2>
+    </div>
+    <div class="card-body">
+        <!-- Search Form -->
+        <form method="get" action="{% url 'user_management' %}" class="mb-4">
+            <div class="form-row">
+                <div class="col-10">
+                    <input type="text" name="q" class="form-control" placeholder="Search by name or email" value="{{ query }}">
+                </div>
+                <div class="col-2">
+                    <button type="submit" class="btn btn-danger btn-block">Search</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- User Table -->
+        <table class="table table-bordered">
+            <thead class="thead-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            {% if user.is_active %}
+                                <span class="badge badge-success">Active</span>
+                            {% else %}
+                                <span class="badge badge-danger">Blocked</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.is_active %}
+                                <a href="{% url 'block_user' user.id %}" class="btn btn-danger btn-sm">Block</a>
+                            {% else %}
+                                <a href="{% url 'unblock_user' user.id %}" class="btn btn-success btn-sm">Unblock</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center">No users found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

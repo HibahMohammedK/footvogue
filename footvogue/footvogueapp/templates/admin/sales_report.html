@@ -1,0 +1,267 @@
+{% extends "admin/admin_dash.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow p-4">
+                <h2 class="mb-4">Sales Report</h2>
+
+                
+
+                <!-- Filter Form -->
+                <form method="GET" action="{% url 'sales_report' %}" class="mb-4">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label><strong>Filter:</strong></label>
+                            <select name="filter" class="form-control" onchange="this.form.submit()">
+                                <option value="daily" {% if filter_type == 'daily' %}selected{% endif %}>Daily</option>
+                                <option value="weekly" {% if filter_type == 'weekly' %}selected{% endif %}>Weekly</option>
+                                <option value="monthly" {% if filter_type == 'monthly' %}selected{% endif %}>Monthly</option>
+                                <option value="yearly" {% if filter_type == 'yearly' %}selected{% endif %}>Yearly</option>
+                                <option value="custom" {% if filter_type == 'custom' %}selected{% endif %}>Custom Date</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-3" id="custom-date-fields" {% if filter_type != 'custom' %}style="display:none;"{% endif %}>
+                            <label><strong>Start Date:</strong></label>
+                            <input type="date" name="start_date" value="{{ start_date }}" class="form-control">
+                        </div>
+
+                        <div class="col-md-3" id="custom-date-fields-end" {% if filter_type != 'custom' %}style="display:none;"{% endif %}>
+                            <label><strong>End Date:</strong></label>
+                            <input type="date" name="end_date" value="{{ end_date }}" class="form-control">
+                        </div>
+
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">Apply</button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Sales Chart -->
+                <canvas id="salesChart"></canvas>
+
+                <!-- Report Summary -->
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card p-3 shadow-sm text-center">
+                            <h5>Total Orders</h5>
+                            <p class="h4">{{ total_orders }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3 shadow-sm text-center">
+                            <h5>Total Sales</h5>
+                            <p class="h4 text-success">${{ total_sales }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3 shadow-sm text-center">
+                            <h5>Total Discount</h5>
+                            <p class="h4 text-danger">-${{ total_discount }}</p>
+                        </div>
+                    </div>
+                </div>
+                
+
+                <!-- Order List -->
+                <div class="table-responsive mt-4">
+                    <table class="table table-bordered">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Discount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr>
+                                <td>{{ order.id }}</td>
+                                <td>{{ order.order_date }}</td>
+                                <td>${{ order.total_amount }}</td>
+                                <td>${{ order.discount }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center">No orders found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Export Buttons -->
+                <div class="text-right mt-4">
+                    <a href="{% url 'download_sales_report' 'pdf' %}?filter={{ filter_type }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-danger">
+                        <i class="fas fa-file-pdf"></i> Download PDF
+                    </a>
+                    <a href="{% url 'download_sales_report' 'excel' %}?filter={{ filter_type }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-success">
+                        <i class="fas fa-file-excel"></i> Download Excel
+                    </a>
+                </div><br>
+                <!-- Top Selling Products & Categories -->
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">Top 10 Selling Products</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Product</th>
+                                                <th>Category</th>
+                                                <th>Units Sold</th>
+                                                <th>Revenue</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for product in top_products %}
+                                            <tr>
+                                                <td>{{ product.product_name }}</td>
+                                                <td>{{ product.category_name }}</td>
+                                                <td>{{ product.total_sold }}</td>
+                                                <td>${{ product.total_revenue }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr>
+                                                <td colspan="4" class="text-center">No products found</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">Top 10 Selling Categories</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Category</th>
+                                                <th>Units Sold</th>
+                                                <th>Products</th>
+                                                <th>Revenue</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for category in top_categories %}
+                                            <tr>
+                                                <td>{{ category.category_name }}</td>
+                                                <td>{{ category.total_sold }}</td>
+                                                <td>{{ category.total_products }}</td>
+                                                <td>${{ category.total_revenue }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr>
+                                                <td colspan="4" class="text-center">No categories found</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.querySelector("[name='filter']").addEventListener("change", function() {
+        let customFields = document.getElementById("custom-date-fields");
+        let customFieldsEnd = document.getElementById("custom-date-fields-end");
+        if (this.value === "custom") {
+            customFields.style.display = "block";
+            customFieldsEnd.style.display = "block";
+        } else {
+            customFields.style.display = "none";
+            customFieldsEnd.style.display = "none";
+        }
+    });
+
+    document.querySelector("[name='filter']").addEventListener("change", function() {
+        let customFields = document.getElementById("custom-date-fields");
+        let customFieldsEnd = document.getElementById("custom-date-fields-end");
+        if (this.value === "custom") {
+            customFields.style.display = "block";
+            customFieldsEnd.style.display = "block";
+        } else {
+            customFields.style.display = "none";
+            customFieldsEnd.style.display = "none";
+        }
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        var ctx = document.getElementById("salesChart").getContext("2d");
+
+        // Gradient fill
+        var gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, "rgba(54, 162, 235, 0.5)");
+        gradient.addColorStop(1, "rgba(255, 255, 255, 0.1)");
+
+        var chartType = "{{ filter_type }}" === "daily" ? "bar" : "line"; // Dynamic chart type
+
+        var salesChart = new Chart(ctx, {
+            type: chartType,
+            data: {
+                labels: JSON.parse('{{ sales_chart_labels|safe }}'),
+                datasets: [{
+                    label: "Total Sales",
+                    data: JSON.parse('{{ sales_chart_values|safe }}'),
+                    backgroundColor: gradient,
+                    borderColor: "rgba(54, 162, 235, 1)",
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3, // Smooth curves for line charts
+                    borderRadius: 6 // Rounded bars in bar chart
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            color: "#333",
+                            font: { size: 14 }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: "#000",
+                        titleColor: "#fff",
+                        bodyColor: "#fff",
+                        padding: 10
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        title: { display: true, text: "Date", font: { size: 14 } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: "rgba(200, 200, 200, 0.3)" },
+                        title: { display: true, text: "Sales Amount ($)", font: { size: 14 } }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

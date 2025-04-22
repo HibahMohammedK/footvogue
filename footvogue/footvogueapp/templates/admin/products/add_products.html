@@ -1,0 +1,209 @@
+{% extends "admin/admin_dash.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow-lg">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="title text-center m-0">Add Product</h4>
+                </div>
+                {% if messages %}
+                        <ul class="messages mt-3">
+                            {% for message in messages %}
+                            <p class="text-{% if message.tags %}{{ message.tags }}{% endif %}">{{ message }}</p>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                <div class="card-body">
+                    <form method="POST" action="{% url 'add_product' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <!-- Product Basic Info -->
+                        <div class="mb-4">
+                            <label class="form-label">Product Name</label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Category</label>
+                            <select class="form-control" name="category" required>
+                                <option value="">Select Category</option>
+                                {% for category in categories %}
+                                    <option value="{{ category.id }}">{{ category.category_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" name="description" rows="3" required></textarea>
+                        </div>
+
+                        <!-- Color Section -->
+                        <div class="mb-4 border p-3">
+                            <h5>Colors</h5>
+                            <div id="color-container">
+                                <div class="color-entry mb-4 border p-3">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <label>Color Name</label>
+                                            <input type="text" name="color_0_name" class="form-control" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label>Color Code</label>
+                                            <input type="color" name="color_0_code" class="form-control" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label>Images (3+ required)</label>
+                                            <input type="file" name="color_0_images" class="form-control" multiple required>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-danger mt-2" onclick="removeColor(this)">Remove Color</button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary" onclick="addColor()">Add Another Color</button>
+                        </div>
+
+                        <!-- Size Section -->
+                        <div class="mb-4 border p-3">
+                            <h5>Sizes</h5>
+                            <div id="size-container">
+                                <div class="size-entry mb-3">
+                                    <div class="input-group">
+                                        <input type="text" name="size_0" class="form-control" placeholder="e.g., S, M, L" required>
+                                        <button class="btn btn-danger" type="button" onclick="removeSize(this)">×</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary" onclick="addSize()">Add Another Size</button>
+                        </div>
+
+                        <!-- Variants Matrix -->
+                        <div class="mb-4 border p-3" id="variants-section" style="display: none;">
+                            <h5>Variants Pricing & Stock</h5>
+                            <div id="variants-matrix"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success mt-4">Add Product</button>
+                    </form>
+
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let colorCount = 0;
+let sizeCount = 0;
+
+// Color Management
+function addColor() {
+    colorCount++;
+    const container = document.getElementById('color-container');
+    const newColor = document.createElement('div');
+    newColor.className = 'color-entry mb-4 border p-3';
+    newColor.innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <label>Color Name</label>
+                <input type="text" name="color_${colorCount}_name" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+                <label>Color Code</label>
+                <input type="color" name="color_${colorCount}_code" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+                <label>Images (3+ required)</label>
+                <input type="file" name="color_${colorCount}_images" class="form-control" multiple required>
+            </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-danger mt-2" onclick="removeColor(this)">Remove Color</button>
+    `;
+    container.appendChild(newColor);
+    updateVariantsMatrix();
+}
+
+function removeColor(button) {
+    button.closest('.color-entry').remove();
+    colorCount--;
+    updateVariantsMatrix();
+}
+
+// Size Management
+function addSize() {
+    sizeCount++;
+    const container = document.getElementById('size-container');
+    const newSize = document.createElement('div');
+    newSize.className = 'size-entry mb-3';
+    newSize.innerHTML = `
+        <div class="input-group">
+            <input type="text" name="size_${sizeCount}" class="form-control" placeholder="e.g., S, M, L" required>
+            <button class="btn btn-danger" type="button" onclick="removeSize(this)">×</button>
+        </div>
+    `;
+    container.appendChild(newSize);
+    updateVariantsMatrix();
+}
+
+function removeSize(button) {
+    button.closest('.size-entry').remove();
+    sizeCount--;
+    updateVariantsMatrix();
+}
+
+// Variants Matrix Management
+function updateVariantsMatrix() {
+    const matrixDiv = document.getElementById('variants-matrix');
+    const variantSection = document.getElementById('variants-section');
+    matrixDiv.innerHTML = '';
+
+    if (colorCount >= 0 && sizeCount >= 0) {
+        variantSection.style.display = 'block';
+        
+        // Create table
+        const table = document.createElement('table');
+        table.className = 'table table-bordered';
+        
+        // Create header row with sizes
+        const headerRow = document.createElement('tr');
+        headerRow.innerHTML = '<th>Color \\ Size</th>';
+        const sizeInputs = document.querySelectorAll('input[name^="size_"]');
+        sizeInputs.forEach((sizeInput, sizeIndex) => {
+            headerRow.innerHTML += `<th>${sizeInput.value || 'Size'}</th>`;
+        });
+        table.appendChild(headerRow);
+
+        // Create data rows
+        const colorEntries = document.querySelectorAll('.color-entry');
+        colorEntries.forEach((colorEntry, colorIndex) => {
+            const row = document.createElement('tr');
+            const colorName = colorEntry.querySelector(`input[name="color_${colorIndex}_name"]`).value || 'Color';
+            row.innerHTML = `<td>${colorName}</td>`;
+            
+            sizeInputs.forEach((sizeInput, sizeIndex) => {
+                row.innerHTML += `
+                    <td>
+                        <input type="number" name="variant_${colorIndex}_${sizeIndex}_price" 
+                               class="form-control mb-1" placeholder="Price" required>
+                        <input type="number" name="variant_${colorIndex}_${sizeIndex}_stock" 
+                               class="form-control" placeholder="Stock" required>
+                    </td>
+                `;
+            });
+            table.appendChild(row);
+        });
+
+        matrixDiv.appendChild(table);
+    } else {
+        variantSection.style.display = 'none';
+    }
+}
+
+// Initial update
+document.querySelectorAll('input[name="size_0"], input[name="color_0_name"]').forEach(input => {
+    input.addEventListener('input', updateVariantsMatrix);
+});
+</script>
+{% endblock %}

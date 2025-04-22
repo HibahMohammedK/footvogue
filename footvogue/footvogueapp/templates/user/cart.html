@@ -1,0 +1,107 @@
+{% extends "user/home.html" %}
+{% load static %}
+{% block content %}
+<style>
+.cart-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+.cart-items {
+    flex: 2;
+    margin-right: 20px;
+}
+.cart-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 5px;
+}
+.cart-item-image img {
+    max-width: 100px;
+    margin-right: 15px;
+}
+.cart-item-details {
+    flex: 2;
+}
+.cart-item-actions {
+    text-align: right;
+}
+.cart-summary {
+    flex: 1;
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 5px;
+}
+.checkout-btns .btn {
+    margin-top: 10px;
+}
+</style>
+<div class="container my-5">
+    <h2 class="section-title">Shopping Cart</h2>
+
+    {% if cart_items %}
+    <div class="cart-container">
+        <div class="cart-items">
+            {% for item in cart_items %}
+            <div class="cart-item">
+                <div class="cart-item-image">
+                    {% if item.image_url %}
+                    <img src="{{ item.image_url }}" alt="{{ item.product_name }}">
+                    {% else %}
+                    <img src="{% static 'images/placeholder.png' %}" alt="No image available">
+                    {% endif %}
+                </div>
+                <div class="cart-item-details">
+                    <h4 class="product-name">{{ item.product_name }}</h4>
+                    <p>
+                        <strong>Color:</strong> {{ item.color }} 
+                        <br>
+                        <strong>Size:</strong> {{ item.size }}
+                    </p>
+                    <div class="cart-item-price">
+                        {% if item.offer_price and item.offer_price < item.original_price %}
+                            <p><del class="product-old-price">₹{{ item.original_price|floatformat:2 }}</del> 
+                            <strong>₹{{ item.offer_price|floatformat:2 }}</strong></p>
+                        {% else %}
+                            <p>Price: ₹{{ item.original_price|floatformat:2 }}</p>
+                        {% endif %}
+
+                    
+                        <form method="POST" action="{% url 'update_cart' item.id %}" class="update-cart-form">
+                            {% csrf_token %}
+                            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="100" class="quantity-input">
+                            <button type="submit" class="btn btn-outline-primary btn-sm">Update</button>
+                        </form>
+                    </div>                    
+                </div>
+                <div class="cart-item-actions">
+                    <p>Total: ${{ item.total_price|floatformat:2 }}</p>
+                    <a href="{% url 'remove_from_cart' item.id %}" class="btn btn-danger btn-sm"><i class="fa fa-trash"></i> Remove</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="cart-summary">
+            <h4>Cart Summary</h4>
+            <p><strong>Total Items:</strong> {{ cart_items|length }}</p>
+            <p><strong>Subtotal:</strong> ₹{{ total_price|floatformat:2 }}</p>
+            <div class="checkout-btns">
+                <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
+                <a href="{% url 'checkout'%}" class="btn btn-success">Proceed to Checkout</a>
+            </div>
+        </div>
+    </div>
+     
+
+    {% else %}
+    <div class="empty-cart">
+        <p>Your cart is empty.</p>
+        <a href="{% url 'home' %}" class="btn btn-primary">Continue Shopping</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

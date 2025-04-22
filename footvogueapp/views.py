@@ -1317,7 +1317,7 @@ def place_order(request):
                 price=cart_item.product_variant.get_discounted_price(),
             )
 
-        # --- Payment Processing ---
+                # --- Payment Processing ---
         payment_success = False
 
         if payment_method == "razorpay":
@@ -1361,19 +1361,25 @@ def place_order(request):
                 payment_success = True
                 order.payment_status = "Paid"
                 order.status = "Processing"
-                messages.success(request, "Payment successful using wallet. Please try another payment method.")
+                messages.success(request, "Payment successful using wallet.")
             else:
                 messages.error(request, "Insufficient wallet balance.")
                 return redirect("payment_pending", order_id=order.id)
-
 
         # --- Update Order Status & Stock ---
         if payment_success:
             # Reduce stock only after successful payment
             for item in order.items.all():
                 variant = item.product_variant
-                variant.stock_quantity -= item.quantity
-                variant.save()
+                if variant.stock_quantity >= item.quantity:
+                    variant.stock_quantity -= item.quantity
+                    variant.save()
+                else:
+                    messages.error(request, f"Insufficient stock for {variant}")
+                    order.status = "Payment Failed"
+                    order.payment_status = "Failed"
+                    order.save()
+                    return redirect("payment_pending", order_id=order.id)
 
             # Mark coupon as used
             if applied_coupon:

@@ -1,0 +1,103 @@
+{% extends "user/home.html" %}
+{% load socialaccount %}
+{% block content %}
+
+<!-- REGISTER SECTION -->
+<div id="login" class="section d-flex justify-content-center align-items-center vh-100" 
+style="background: url('/static/img/login_back.PNG') no-repeat center center/cover; padding: 90px 0;">
+<div id="register" class="section">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card shadow-lg p-4">
+                    <h2 class="mb-4 text-center" style="color: #f1e7e7; background-color: rgba(17, 17, 17, 0.986); border-radius: 6rem;"><strong>Sign-up</strong></h2>
+
+                    <!-- Register Form -->
+                    <form method="POST" action="{% url 'register' %}" id="register-form">
+                        {% csrf_token %}
+                        
+                        <!-- Username input -->
+                        <div class="form-group mb-3">
+                            <input class="form-control" type="text" name="username" placeholder="Enter Your Username" required>
+                        </div>
+
+                        <!-- Email input -->
+                        <div class="form-group mb-3">
+                            <input class="form-control" type="email" name="email" placeholder="Enter Your Email" required>
+                        </div>
+
+                        <!-- Password input -->
+                        <div class="form-group mb-3">
+                            <input class="form-control" type="password" name="password" placeholder="Enter Your Password" required>
+                        </div>
+
+                        <!-- Confirm Password input -->
+                        <div class="form-group mb-3">
+                            <input class="form-control" type="password" name="confirm_password" placeholder="Confirm Your Password" required>
+                        </div>
+
+                        <!-- Phone number input with country code -->
+                        <div class="form-group mb-3" id="phone-field">
+                            <input type="tel" id="phone-number" class="form-control" name="phone_number" placeholder="Enter Your Phone Number">
+                        </div>
+
+                        <!-- ✅ Referral Code input (optional) -->
+                        <div class="form-group mb-3">
+                            <input class="form-control" type="text" name="referral_code" placeholder="Enter Referral Code (Optional)">
+                        </div>
+
+                        <!-- Submit button -->
+                        <button type="submit"  class="primary-btn order-submit"> Register</button>
+                    </form><br>
+                    <a href="{% provider_login_url 'google' %}" class="btn btn-google"  style="color: #f1e7e7; background-color: rgba(240, 234, 234, 0.315); border-radius: 6rem;">
+                        <i class="fa fa-google"></i> Sign Up with Google
+                    </a>
+                    
+
+                     <!-- Messages -->
+                     {% if messages %}
+                     <div class="mt-3 text-center">
+                         {% for message in messages %}
+                         <p style="color: red;">{{ message }}</p>
+                         {% endfor %}
+                     </div>
+                     {% endif %}
+
+
+                    <!-- Login link -->
+                    <p class="mt-3 text-center">Already have an account? <a href="{% url 'login' %}">Login here</a></p>
+
+                    <!-- Social media links -->
+                    <ul class="newsletter-follow text-center ">
+                        <li><a href="#"><i class="fa fa-facebook"></i></a></li>
+                        <li><a href="#"><i class="fa fa-twitter"></i></a></li>
+                        <li><a href="#"><i class="fa fa-instagram"></i></a></li>
+                        <li><a href="#"><i class="fa fa-pinterest"></i></a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+<!-- /REGISTER SECTION -->
+
+<script>
+    // Initialize intl-tel-input on the phone number input field
+    var input = document.querySelector("#phone-number");
+    var iti = window.intlTelInput(input, {
+        separateDialCode: true,  // This will separate the dial code from the phone number
+        utilsScript: "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.15/js/utils.js" // Optional: used for validation
+    });
+
+    // Add an event listener for form submission
+    document.getElementById('register-form').addEventListener('submit', function (e) {
+        // Retrieve the full phone number including country code
+        var fullPhoneNumber = iti.getNumber();  // This will give you the phone number with the country code
+        
+        // Set the full phone number in the phone_number input field before submitting
+        input.value = fullPhoneNumber;  // Update the input field with the correct value
+    });
+</script>
+
+{% endblock %}
