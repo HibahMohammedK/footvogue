@@ -137,7 +137,6 @@ Admin can manage:
 **Hibah Mohammed**  
 📍 Abu Dhabi, UAE  
 📧 hibahmohammedk@gmail.com  
-🔗 [LinkedIn](https://www.linkedin.com/in/hibahmohammed) *(Add your LinkedIn if available)*  
 
 ---
 
