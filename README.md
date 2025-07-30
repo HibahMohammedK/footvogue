@@ -4,29 +4,41 @@ FootVogue is a full-featured e-commerce web application built using Django and P
 🚀 Features
 🧑‍💼 User Module
 ✅ Secure Signup/Login with OTP Verification
+
 ✅ Integrated Wallet System for rewards and refunds
+
 ✅ Referral System with automatic wallet credit
 
 🛒 Shopping Experience
 ✅ Advanced Search & Sorting (by price, rating, arrival, etc.)
+
 ✅ Full Cart Management (add/remove/update quantity)
+
 ✅ Stock-based Real-time Inventory Control
+
 ✅ Product Variants (color/size) with dynamic switching
-✅ Option to Cancel or Return items individually or fully
+
+✅ Option to Cancel or Return items individually
 
 💳 Payments
 ✅ Razorpay Integration for secure online payments
-✅ Use of Wallet for full or partial payments
+
+✅ Use of Wallet for payments
 
 🏷️ Discounts & Offers
 ✅ Coupon System with validations and expiration
+
 ✅ Admin-managed Product & Category Offers
+
 ✅ Referral Offers with reward tracking
 
 🛠️ Admin Panel
 ✅ Full CRUD Management for Products, Categories, Coupons, and Offers
+
 ✅ Sales Report with filters (day/week/month/custom)
+
 ✅ Download PDF or Excel sales data
+
 ✅ Filter by date range, view total sales, discounts, orders, etc.
 
 
