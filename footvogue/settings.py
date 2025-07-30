@@ -25,7 +25,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 SECRET_KEY = os.getenv('SECRET_KEY')
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+#DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DEBUG = True
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost').split(',')
 
@@ -76,6 +77,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'footvogueapp.context_processors.wishlist_count',
+                'footvogueapp.context_processors.cart_count',
             ],
         },
     },
@@ -187,16 +190,19 @@ SOCIALACCOUNT_PROVIDERS = {
         },
         'CLIENT_ID': os.getenv('GOOGLE_CLIENT_ID'),
         'SECRET': os.getenv('GOOGLE_CLIENT_SECRET'),
+        'REDIRECT_URI': 'https://www.footvogue.shop/accounts/google/login/callback/'
     }
 }
 
 RAZORPAY_API_KEY = os.getenv('RAZORPAY_KEY_ID')
 RAZORPAY_API_SECRET = os.getenv('RAZORPAY_KEY_SECRET')
 
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SECURE_HSTS_SECONDS = 31536000  # 1 year
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+SOCIALACCOUNT_ADAPTER = 'footvogueapp.adapter.MySocialAccountAdapter'
+
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# SECURE_SSL_REDIRECT = True
+# SESSION_COOKIE_SECURE = True
+# CSRF_COOKIE_SECURE = True
+# SECURE_HSTS_SECONDS = 31536000  # 1 year
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# SECURE_HSTS_PRELOAD = True

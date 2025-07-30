@@ -185,12 +185,11 @@
                                 <a href="{% url 'cart_view' %}" class="dropdown-toggle" data-toggle="dropdown" aria-expanded="true">
                                     <i class="fa fa-shopping-cart"></i>
                                     <span>Your Cart</span>
-                                    <div class="qty">3</div>
+                                    <div class="qty">{{ cart_items|length }}</div>
                                 </a>
                                 
                             </div>
                             <!-- /Cart -->
-
                             <!-- Menu Toogle -->
                             <div class="menu-toggle">
                                 <a href="#">
@@ -203,6 +202,7 @@
                     </div>
                     <!-- /ACCOUNT -->
                 </div>
+                
                 <!-- row -->
             </div>
             <!-- container -->
@@ -210,6 +210,7 @@
         <!-- /MAIN HEADER -->
     </header>
     <!-- /HEADER -->
+     
 
     <div class="container-fluid">
         <div class="row">
@@ -265,47 +266,8 @@
                         {% endblock %}
                     </div>
 
-                    <!-- My Address Book Tab -->
-                    <div class="tab-pane fade {% if request.GET.tab == 'addresses' %}show active{% endif %}" id="addresses">
-                        <h5>My Address Book</h5>
-                         <!-- Messages -->
-                         {% if messages %}
-                         <div class="mt-3 text-center">
-                             {% for message in messages %}
-                             <p style="color: red;">{{ message }}</p>
-                             {% endfor %}
-                         </div>
-                         {% endif %}
-                        {% if addresses %}
-                            <ul class="list-group">
-                                {% for address in addresses %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        {{ address.address_line1 }}, {{ address.city }}, {{ address.state }}
-                                    </div>
-                                    <div>
-                                        {% if address.id %}
-                                            <a href="{% url 'edit_address' address.id %}" class="btn btn-sm btn-outline-secondary me-2">Edit</a>
-                                            <form method="post" action="{% url 'delete_address' address.id %}" class="d-inline">
-                                                {% csrf_token %}
-                                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                                            </form>
-                                        {% else %}
-                                            <span class="text-danger">Invalid address ID</span>
-                                        {% endif %}
-                                    </div>
-                                </li>
-                            {% endfor %}
-
-                            </ul>
-                        {% else %}
-                            <p>No addresses available. Please add one.</p>
-                        {% endif %}
-                        <a href="{% url 'manage_address' %}" class="btn btn-outline-primary mt-3">Add Address</a>
-                    </div>
-
                     <!-- My Orders Tab -->
-                    <div class="tab-pane fade {% if active_tab == 'orders' %}show active{% endif %}" id="orders">
+                    <div class="tab-pane fade {% if request.GET.tab == 'orders' %}show active{% endif %}" id="orders">
                         <h5>My Orders</h5>
 
                         <!-- View Return Requests Button -->
@@ -313,14 +275,15 @@
                             <a href="{% url 'user_returns' %}" class="btn btn-secondary btn-sm">View Return Requests</a>
                         </div>
 
-                         <!-- Messages -->
-                         {% if messages %}
-                         <div class="mt-3 text-center">
-                             {% for message in messages %}
-                             <p style="color: red;">{{ message }}</p>
-                             {% endfor %}
-                         </div>
-                         {% endif %}
+                        <!-- Messages -->
+                        {% if messages %}
+                            <div class="mt-3 text-center">
+                                {% for message in messages %}
+                                    <p style="color: red;">{{ message }}</p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
                         {% if orders %}
                             <ul class="list-group">
                                 {% for order in orders %}
@@ -328,11 +291,11 @@
                                         <h6>Order #{{ order.id }}</h6>
                                         <p><strong>Status:</strong> {{ order.status }}</p>
                                         <p><strong>Total Amount:</strong> ₹{{ order.total_amount|floatformat:2 }}</p>
-                    
+
                                         <div class="order-items">
                                             {% for item in order.items %}
-                                                 <div class="order-item d-flex align-items-center mb-3">
-                                                <!-- Product Image -->
+                                                <div class="order-item d-flex align-items-center mb-3">
+                                                    <!-- Product Image -->
                                                     <div class="order-item-image">
                                                         {% if item.product_image %}
                                                             <img src="{{ item.product_image }}" alt="{{ item.product_name }}" style="max-width: 100px;">
@@ -340,30 +303,58 @@
                                                             <img src="{% static 'images/placeholder.png' %}" alt="No image available" style="max-width: 100px;">
                                                         {% endif %}
                                                     </div>
-                                
+
                                                     <!-- Product Details -->
                                                     <div class="order-item-details ml-3">
                                                         <p><strong>{{ item.product_name }}</strong></p>
                                                         <p>{{ item.color }} - {{ item.size }}</p>
                                                         <p>Quantity: {{ item.quantity }}</p>
-                                                        <p>Price: ₹{{ item.price|floatformat:2 }}</p>
+                                                        <p>Unit Price: ₹{{ item.price|floatformat:2 }}</p>
+                                                        <p>Total: ₹{{ item.total_price|floatformat:2 }}</p>
 
-                                                        <!-- Return Button for This Specific Item -->
-                                                        {% if order.status == 'Completed' %}
-                                                        <div class="mt-2">
-                                                            <form method="GET" action="{% url 'request_return' item.id %}">
-                                                                <button type="submit" class="btn btn-warning btn-sm">
-                                                                    Return {{ item.product_name }} (Size: {{ item.size }})
-                                                                </button>
-                                                            </form>
-                                                        </div>
+                                                        <!-- Return Button -->
+                                                        {% if order.status == 'Completed' and order.payment_status == 'Paid' %}
+                                                            {% if item.has_return_request %}
+                                                                {% if item.return_status == "Approved" %}
+                                                                    <div class="mt-2">
+                                                                        <span class="badge bg-success">✅ Returned</span>
+                                                                    </div>
+                                                                {% elif item.return_status == "Pending" %}
+                                                                    <div class="mt-2">
+                                                                        <span class="badge bg-warning text-dark">Return Pending</span>
+                                                                    </div>
+                                                                {% elif item.return_status == "Rejected" %}
+                                                                    <div class="mt-2">
+                                                                        <span class="badge bg-danger">Return Rejected</span>
+                                                                    </div>
+                                                                {% endif %}
+                                                            {% else %}
+                                                                <div class="mt-2">
+                                                                    <form method="GET" action="{% url 'request_return' item.id %}">
+                                                                        <button type="submit" class="btn btn-warning btn-sm">
+                                                                            Return {{ item.product_name }} (Size: {{ item.size }})
+                                                                        </button>
+                                                                    </form>
+                                                                </div>
+                                                            {% endif %}
                                                         {% endif %}
+
+                                                        <!-- Cancel Individual Product -->
+                                                        <div class="cancel-wrapper" data-item-id="{{ item.id }}">
+                                                            {% if item.cancel_status != 'Cancelled' and order.status != 'Completed' %}
+                                                            <form method="POST" action="{% url 'user_cancel_order' order.id %}" onsubmit="return confirm('Cancel this product?');">
+                                                                {% csrf_token %}
+                                                                <input type="hidden" name="order_item_id" value="{{ item.id }}">
+                                                                <button type="submit" class="btn btn-danger btn-sm cancel-button">Cancel Product</button>
+                                                            </form>
+                                                            {% endif %}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             {% endfor %}
                                         </div>
 
-                                        <!-- Retry Payment Button (for Failed Orders) -->
+                                        <!-- Retry Payment -->
                                         {% if order.payment_status == 'Pending' %}
                                             {% if order.payment_method == 'razorpay' or order.payment_method == 'wallet' %}
                                                 <div class="mt-2">
@@ -374,15 +365,15 @@
                                             {% endif %}
                                         {% endif %}
 
+                                        <!-- Cancel Entire Order Button
+                                        {% if order.has_active_items and order.status == 'Pending' or order.has_active_items and order.status == 'Processing' %}
+                                            <form method="POST" action="{% url 'user_cancel_order' order.id %}" onsubmit="return confirm('Are you sure you want to cancel this order?');">
+                                                {% csrf_token %}
+                                                <button type="submit" name="cancel_order" class="btn btn-danger btn-sm">Cancel Order</button>
+                                            </form>
+                                        {% endif %} -->
 
-                                       <!-- Cancel Order Button -->
-                                        {% if order.status != 'Cancelled' and order.status != 'Completed' and order.status != 'Delivered' %}
-                                        <form method="POST" action="{% url 'user_cancel_order' order.id %}">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="order_id" value="{{ order.id }}">
-                                            <button type="submit" name="cancel_order" class="btn btn-danger btn-sm">Cancel Order</button>
-                                        </form>
-                                        {% endif %}
+
                                     </li>
                                 {% endfor %}
                             </ul>
@@ -422,7 +413,7 @@
     <!-- Add Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-</html>
+
 
 <script>
     function copyReferralCode() {
@@ -498,4 +489,23 @@
         }
     });
 
+window.onload = function () {
+    const cancelWrappers = document.querySelectorAll('.cancel-wrapper');
+
+    cancelWrappers.forEach(wrapper => {
+        const itemId = wrapper.dataset.itemId;
+
+        fetch(`/check-cancel-status/?item_id=${itemId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.cancelled) {
+                    wrapper.innerHTML = '<span class="text-danger">Product Cancelled</span>';
+                }
+            })
+            .catch(err => {
+                console.error('Cancel check failed:', err);
+            });
+    });
+};
 </script>
+</html>

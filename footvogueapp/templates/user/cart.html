@@ -71,16 +71,16 @@
                         {% endif %}
 
                     
-                        <form method="POST" action="{% url 'update_cart' item.id %}" class="update-cart-form">
+                        <form method="POST" class="update-cart-form" data-item-id="{{ item.id }}">
                             {% csrf_token %}
-                            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="100" class="quantity-input">
-                            <button type="submit" class="btn btn-outline-primary btn-sm">Update</button>
+                            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="100" class="quantity-input" data-item-id="{{ item.id }}">
                         </form>
+                       
                     </div>                    
                 </div>
                 <div class="cart-item-actions">
-                    <p>Total: ${{ item.total_price|floatformat:2 }}</p>
-                    <a href="{% url 'remove_from_cart' item.id %}" class="btn btn-danger btn-sm"><i class="fa fa-trash"></i> Remove</a>
+                    <p>Total: ₹<span class="item-total item-total-{{ item.id }}">{{ item.total_price|floatformat:2 }}</span></p>
+                    <a href="{% url 'remove_from_cart' item.id %}" class="btn btn-danger btn-sm confirm-delete"><i class="fa fa-trash"></i> Remove</a>
                 </div>
             </div>
             {% endfor %}
@@ -88,7 +88,7 @@
         <div class="cart-summary">
             <h4>Cart Summary</h4>
             <p><strong>Total Items:</strong> {{ cart_items|length }}</p>
-            <p><strong>Subtotal:</strong> ₹{{ total_price|floatformat:2 }}</p>
+            <p><strong>Subtotal:</strong> ₹<span id="cart-total">{{ total_price|floatformat:2 }}</span></p>
             <div class="checkout-btns">
                 <a href="{% url 'home' %}" class="btn btn-secondary">Continue Shopping</a>
                 <a href="{% url 'checkout'%}" class="btn btn-success">Proceed to Checkout</a>
@@ -104,4 +104,41 @@
     </div>
     {% endif %}
 </div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".quantity-input").forEach(function (input) {
+    input.addEventListener("input", function () {
+      const itemId = this.dataset.itemId;
+      const quantity = this.value;
+      const csrfToken = document.querySelector("input[name='csrfmiddlewaretoken']").value;
+
+      fetch(`/cart/update/${itemId}/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-CSRFToken": csrfToken,
+        },
+        body: new URLSearchParams({
+          quantity: quantity,
+        }),
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          document.querySelector(`.item-total-${itemId}`).textContent = data.item_total.toFixed(2);
+          document.querySelector("#cart-total").textContent = data.cart_total.toFixed(2);
+        } else {
+          alert(data.error || "Something went wrong");
+        }
+      })
+      .catch(error => {
+        console.error("Error:", error);
+      });
+    });
+  });
+});
+</script>
+
 {% endblock %}

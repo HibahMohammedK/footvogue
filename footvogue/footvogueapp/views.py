@@ -2,6 +2,7 @@ import logging
 import json
 import datetime
 import razorpay
+import random
 import pandas as pd
 from dateutil import parser
 from datetime import timezone as dt_timezone
@@ -12,7 +13,7 @@ from django.urls import reverse
 from django.template.loader import render_to_string
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.core.mail import EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.auth import (
     authenticate, 
@@ -209,36 +210,59 @@ def resend_otp(request):
     messages.error(request, 'No user found to resend OTP. Please log in again.')
     return redirect('login')
 
-
 @never_cache
 def email_verification_view(request):
     if request.method == "POST":
         otp_code = request.POST.get("otp", "").strip()
 
+        # Check if the OTP is for a login-time verification
+        user_id = request.session.get("unverified_user_id")
+        new_email = request.session.get("pending_email_change")
+
         try:
-            # Look for the OTP related to the user's email
-            otp = OTP.objects.get(otp=otp_code)
+            if user_id:
+                # OTP during login
+                user = CustomUser.objects.get(id=user_id)
+                otp = OTP.objects.get(otp=otp_code, user=user)
 
-            # Check if the OTP is expired
-            if otp.is_expired():
-                messages.error(request, "OTP has expired. Please request a new one.")
-                return redirect("email_verification")
+                if otp.is_expired():
+                    messages.error(request, "OTP has expired. Please request a new one.")
+                    return redirect("email_verification")
 
-            # Mark the OTP as verified
-            otp.is_verified = True
-            otp.save()
+                otp.is_verified = True
+                otp.save()
 
-            # Mark the associated user as verified
-            user = otp.user
-            user.is_verified = True
-            user.save()
+                user.is_verified = True
+                user.save()
 
-            # Log the user in
-            auth_login(request, user)
+                del request.session["unverified_user_id"]
 
-            # Display a success message and redirect to home
-            messages.success(request, "Email verified successfully! Welcome to the site.")
-            return redirect("home")  # Redirect to the home page after verification
+                auth_login(request, user)
+                messages.success(request, "Email verified successfully! Welcome back.")
+                return redirect("home")
+
+            elif request.user.is_authenticated and new_email:
+                # OTP during email change (profile edit)
+                otp = OTP.objects.get(otp=otp_code, user=request.user, email=new_email)
+
+                if otp.is_expired():
+                    messages.error(request, "OTP has expired. Please request a new one.")
+                    return redirect("email_verification")
+
+                otp.is_verified = True
+                otp.save()
+
+                request.user.email = new_email
+                request.user.save()
+
+                del request.session["pending_email_change"]
+
+                messages.success(request, "Email verified and updated successfully!")
+                return redirect("profile")
+
+            else:
+                messages.error(request, "Invalid session or missing data.")
+                return redirect("login")
 
         except OTP.DoesNotExist:
             messages.error(request, "Invalid OTP.")
@@ -803,7 +827,7 @@ def product_details(request, product_id, variant_id=None):
         for variant in color_filtered_variants
     }
 
-    print(f"Variant Map: {variant_map}")  # Debug output
+    
 
     product_images = ProductImage.objects.filter(variant=selected_variant).distinct()
 
@@ -940,24 +964,53 @@ def profile(request):
         'orders': order_details,
     })
 
-
 @never_cache
 @login_required
 def edit_profile(request):
+    user = request.user
+    original_email = user.email  # Save original email for comparison
+
     if request.method == 'POST':
-        # use the `request.POST` data to update the user instance
-        form = UserUpdateForm(request.POST, instance=request.user)
+        form = UserUpdateForm(request.POST, instance=user)
+
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Your profile has been updated.')
-            return redirect('profile')  # Redirect after successful update
+            new_email = form.cleaned_data.get('email')
+
+            if new_email != original_email:
+                # Generate OTP
+                otp_code = str(random.randint(100000, 999999))
+
+                # Don't save form yet. Just store OTP.
+                OTP.objects.create(user=user, otp=otp_code, email=new_email)
+
+                # Send OTP to new email
+                send_mail(
+                    'Email Change Verification',
+                    f'Your OTP to change your email is: {otp_code}',
+                    'your@email.com',  # Replace with your real sender
+                    [new_email],
+                    fail_silently=False,
+                )
+
+                # Store email in session to verify later
+                request.session['pending_email_change'] = new_email
+                request.session['email_change_user_id'] = user.id
+
+                messages.info(request, 'A verification OTP has been sent to your new email.')
+                return redirect('email_verification')
+
+            else:
+                # Email unchanged — safe to save
+                form.save()
+                messages.success(request, 'Profile updated successfully.')
+                return redirect('profile')
         else:
-            messages.error(request, 'Please correct the errors below.')
+            messages.error(request, 'Please fix the errors below.')
+
     else:
-        form = UserUpdateForm(instance=request.user)
+        form = UserUpdateForm(instance=user)
 
     return render(request, 'user/edit_profile.html', {'form': form})
-
 
 @never_cache
 @login_required

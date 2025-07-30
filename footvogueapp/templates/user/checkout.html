@@ -18,7 +18,7 @@
                         <div class="form-group">
                             <label for="address_select">Select an Address</label>
                             <select class="input" name="address_select" id="address_select" onchange="fillAddressFields()">
-                                <option value="" disabled selected>Select an Address</option>
+                                <option value="" disabled {% if not shipping_address %}selected{% endif %}>Select an Address</option>
                                 {% for address in user.addresses.all %}
                                     <option value="{{ address.id }}" 
                                         data-line1="{{ address.address_line1 }}" 
@@ -26,7 +26,8 @@
                                         data-city="{{ address.city }}" 
                                         data-state="{{ address.state }}" 
                                         data-postal="{{ address.postal_code }}" 
-                                        data-country="{{ address.country }}">
+                                        data-country="{{ address.country }}"
+                                        {% if shipping_address and address.id == shipping_address.id %}selected{% endif %}>
                                         {{ address.address_line1 }}, {{ address.city }}
                                     </option>
                                 {% empty %}
@@ -35,30 +36,42 @@
                             </select>
                         </div>
                         
-                        <!-- New Address Form (Hidden if an address is selected) -->
+                        <!-- New Address Form -->
                         <div class="form-group">
                             <label for="address_line1">Address Line 1</label>
-                            <input class="input" type="text" name="address_line1" id="address_line1" placeholder="Address Line 1" required>
+                            <input class="input" type="text" name="address_line1" id="address_line1"
+                                placeholder="Address Line 1" required
+                                value="{{ shipping_address.address_line1|default:'' }}">
                         </div>
                         <div class="form-group">
                             <label for="address_line2">Address Line 2</label>
-                            <input class="input" type="text" name="address_line2" id="address_line2" placeholder="Address Line 2 (Optional)">
+                            <input class="input" type="text" name="address_line2" id="address_line2"
+                                placeholder="Address Line 2 (Optional)"
+                                value="{{ shipping_address.address_line2|default:'' }}">
                         </div>
                         <div class="form-group">
                             <label for="city">City</label>
-                            <input class="input" type="text" name="city" id="city" placeholder="City" required>
+                            <input class="input" type="text" name="city" id="city"
+                                placeholder="City" required
+                                value="{{ shipping_address.city|default:'' }}">
                         </div>
                         <div class="form-group">
                             <label for="state">State</label>
-                            <input class="input" type="text" name="state" id="state" placeholder="State" required>
+                            <input class="input" type="text" name="state" id="state"
+                                placeholder="State" required
+                                value="{{ shipping_address.state|default:'' }}">
                         </div>
                         <div class="form-group">
                             <label for="postal_code">Postal Code</label>
-                            <input class="input" type="text" name="postal_code" id="postal_code" placeholder="Postal Code" required>
+                            <input class="input" type="text" name="postal_code" id="postal_code"
+                                placeholder="Postal Code" required
+                                value="{{ shipping_address.postal_code|default:'' }}">
                         </div>
                         <div class="form-group">
                             <label for="country">Country</label>
-                            <input class="input" type="text" name="country" id="country" placeholder="Country" required>
+                            <input class="input" type="text" name="country" id="country"
+                                placeholder="Country" required
+                                value="{{ shipping_address.country|default:'' }}">
                         </div>
 
                         <div class="form-group">
@@ -69,7 +82,8 @@
                         <button type="submit" class="primary-btn">Save Address & continue shopping</button>
                     </form>
                 </div>
-            </div>
+            </div><br>
+
 
             <!-- Order Summary -->
             <div class="col-md-5 order-details">
@@ -96,6 +110,32 @@
                         </div>
                         {% endfor %}
                     </div>
+                    {% if available_coupons %}
+                    <div class="available-coupons">
+                        <h6>Available Coupons</h6>
+                        <ul>
+                            {% for coupon in available_coupons %}
+                            <li>
+                                <strong>{{ coupon.coupon_code }}</strong> -
+                                {{ coupon.get_discount_type_display }}: 
+                                {% if coupon.discount_type == 'percentage' %}
+                                    {{ coupon.discount_value }}%
+                                {% else %}
+                                    ₹{{ coupon.discount_value }}
+                                {% endif %}
+                                {% if coupon.min_purchase %}
+                                    (Min Purchase: ₹{{ coupon.min_purchase }})
+                                {% endif %}
+                                <button style="padding: 5px 10px; border-radius: 30px; border: 1px solid #646060; background-color: #646060; color: white; cursor: pointer;"
+                                        onclick="document.getElementById('coupon_code').value='{{ coupon.coupon_code }}'">
+                                    Use
+                                </button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
                     <div class="order-col">
                         <div><strong>Apply Coupon</strong></div>
                         <div>
@@ -239,6 +279,48 @@
 </style>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
+    function saveAddressBeforePayment(callback) {
+        // Check if address is already selected
+        let selected = document.getElementById("address_select").value;
+        if (selected) {
+            callback();  // Address already selected
+            return;
+        }
+
+        // Prepare address data from input fields
+        const data = {
+            address_line1: document.getElementById("address_line1").value,
+            address_line2: document.getElementById("address_line2").value,
+            city: document.getElementById("city").value,
+            state: document.getElementById("state").value,
+            postal_code: document.getElementById("postal_code").value,
+            country: document.getElementById("country").value,
+        };
+
+        // Send AJAX POST request to save the address
+        fetch("{% url 'ajax_save_address' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: new URLSearchParams(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log("Address saved!");
+                callback();  // Proceed to payment or form submission
+            } else {
+                alert("Please fill the address correctly.");
+            }
+        })
+        .catch(error => {
+            console.error("Address save error:", error);
+        });
+    }
+
+
     function fillAddressFields() {
         const select = document.getElementById("address_select");
         const selectedOption = select.options[select.selectedIndex];
@@ -323,41 +405,64 @@
 
         // Function to initiate Razorpay Payment
         
-        function initiateRazorpay() {
+        function initiateRazorpay(orderId) {
             var options = {
-                "key": "{{ razorpay_key_id }}",
+                "key": "{{ razorpay_api_key }}",
                 "amount": document.getElementById("final_price").value * 100,
                 "currency": "INR",
                 "name": "Foot Vogue",
-                "order_id": document.getElementById("razorpay_order_id").value,
+                "order_id": orderId,  // ✅ Now dynamically passed
                 "handler": function(response) {
-                    // Set payment details regardless of success
                     document.getElementById("razorpay_payment_id").value = response.razorpay_payment_id;
                     document.getElementById("razorpay_order_id").value = response.razorpay_order_id;
                     document.getElementById("razorpay_signature").value = response.razorpay_signature;
-                    checkoutForm.submit();
+                    document.getElementById("checkout-form").submit();
                 },
                 "theme": {"color": "#3399cc"}
             };
 
             var rzp1 = new Razorpay(options);
-            
+
             rzp1.on('payment.failed', function(response) {
-                // Set failed payment details
                 document.getElementById("razorpay_payment_id").value = 'failed_' + Date.now();
                 document.getElementById("razorpay_order_id").value = response.error.metadata.order_id;
                 document.getElementById("razorpay_signature").value = 'failed_payment';
-                checkoutForm.submit();
+                document.getElementById("checkout-form").submit();
             });
 
             rzp1.open();
         }
 
+
         // Handle Razorpay payment button click
         razorpayButton.onclick = function(e) {
             e.preventDefault();
-            initiateRazorpay();
+            saveAddressBeforePayment(() => {
+                fetch("{% url 'create_razorpay_order' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    body: JSON.stringify({})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.razorpay_order_id) {
+                        initiateRazorpay(data.razorpay_order_id);
+                    } else {
+                        // Show custom message instead of generic failure
+                        alert("Please click 'Save Address & Continue' once before making payment.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Razorpay order error:", error);
+                    alert("Please click 'Save Address & Continue' before making payment.");
+                });
+            });
         };
+
+
 
         // Function to show modal on payment failure
         function showModal(errorMsg) {
@@ -386,6 +491,16 @@
 
         // Make closeModal globally accessible
         window.closeModal = closeModal;
+
+        document.querySelector(".order-submit").onclick = function(e) {
+            if (!document.getElementById("address_select").value && !document.getElementById("address_line1").value) {
+                e.preventDefault(); // Stop form from submitting immediately
+                saveAddressBeforePayment(() => {
+                    document.getElementById("checkout-form").submit(); // Submit after address saved
+                });
+            }
+        };
+
     });
 
 </script>

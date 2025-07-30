@@ -12,9 +12,9 @@
         <div class="row">
             <div class="col-md-12">
                 <ul class="breadcrumb-tree">
-                    <li><a href="#">Home</a></li>
+                    <li><a href="{% url ' ' %}">Home</a></li>
                     {% for category in categories %}
-                        <li><a href="#">{{ category.category_name }}</a></li>  <!-- Adjust 'category_name' as per your model -->
+                        <li><a href="{% url 'products' %}">{{ category.category_name }}</a></li>  <!-- Adjust 'category_name' as per your model -->
                     {% endfor %}
                     <li class="active">{{ product.name }}</li>  <!-- Display the product name -->
                 </ul>
@@ -35,7 +35,7 @@
 				<div class="row">
                   <!-- Product main img -->
                     <div class="col-md-5 col-md-push-2">
-                        <div id="product-main-img">
+                        <div id="product-main-img" class="product-preview-slick" data-nav="#product-imgs">
                             {% for image in selected_variant.productimage_set.all %}
                                 <div class="product-preview">
                                     <img src="{{ image.image_url.url }}" alt="{{ product.name }} - {{ selected_variant.color.color_name }} - {{ selected_variant.size.size_name }}">
@@ -46,7 +46,7 @@
 
                     <!-- Product Thumbnail Images -->
                     <div class="col-md-2 col-md-pull-5">
-                        <div id="product-imgs">
+                        <div id="product-imgs" class="product-preview-slick-nav">
                             {% for image in selected_variant.productimage_set.all %}
                                 <div class="product-preview">
                                     <img src="{{ image.image_url.url }}" alt="{{ product.name }} - {{ selected_variant.color.color_name }} - {{ selected_variant.size.size_name }}">
@@ -496,7 +496,7 @@
 			<!-- /container -->
 		</div>
 		<!-- /NEWSLETTER -->
-{% endblock %}
+
 
 <style>
     .offer-banner {
@@ -530,19 +530,14 @@
 }
 
 </style>
-
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // Get the review form
-        const reviewForm = document.getElementById('review-form');
-        
-        reviewForm.addEventListener('submit', function(event) {
-            event.preventDefault(); // Prevent the form from submitting traditionally
-
-            // Use FormData to capture the form data
+document.addEventListener("DOMContentLoaded", function () {
+    // Review Form Handling
+    const reviewForm = document.getElementById('review-form');
+    if (reviewForm) {
+        reviewForm.addEventListener('submit', function (event) {
+            event.preventDefault();
             const formData = new FormData(reviewForm);
-
-            // Send the form data via AJAX
             fetch(reviewForm.action, {
                 method: 'POST',
                 body: formData,
@@ -550,67 +545,147 @@
                     'X-CSRFToken': document.querySelector('[name="csrfmiddlewaretoken"]').value,
                 },
             })
-            .then(response => response.json())  // Parse the JSON response
-            .then(data => {
-                // Get the message container
-                const messageContainer = document.getElementById('review-message');
-
-                if (data.success) {
-                    // Show success message
+                .then(response => response.json())
+                .then(data => {
+                    const messageContainer = document.getElementById('review-message');
                     messageContainer.style.display = 'block';
-                    messageContainer.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
-                } else {
-                    // Show error messages
-                    messageContainer.style.display = 'block';
-                    let errorMessages = '';
-                    for (let field in data.errors) {
-                        errorMessages += `<p><strong>${field}</strong>: ${data.errors[field].join(', ')}</p>`;
+                    if (data.success) {
+                        messageContainer.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    } else {
+                        let errorMessages = '';
+                        for (let field in data.errors) {
+                            errorMessages += `<p><strong>${field}</strong>: ${data.errors[field].join(', ')}</p>`;
+                        }
+                        messageContainer.innerHTML = `<div class="alert alert-danger">${errorMessages}</div>`;
                     }
-                    messageContainer.innerHTML = `<div class="alert alert-danger">${errorMessages}</div>`;
-                }
-            })
-            .catch(error => {
-                // Show a generic error message if the AJAX request fails
-                const messageContainer = document.getElementById('review-message');
-                messageContainer.style.display = 'block';
-                messageContainer.innerHTML = '<div class="alert alert-danger">Something went wrong. Please try again later.</div>';
-            });
+                })
+                .catch(() => {
+                    const messageContainer = document.getElementById('review-message');
+                    messageContainer.style.display = 'block';
+                    messageContainer.innerHTML = '<div class="alert alert-danger">Something went wrong. Please try again later.</div>';
+                });
         });
-    }); 
+    }
 
+    // Size Dropdown Logic
     function updateVariant() {
-    var sizeSelect = document.getElementById("size-select");
-    var selectedSizeId = sizeSelect.value;
-    
-    var variantMapInput = document.getElementById("variant-map");
-    var variantMap = JSON.parse(variantMapInput.value);
-    
-    var variantIdInput = document.getElementById("variant-id");
-
-    console.log("Selected Size ID:", selectedSizeId);
-    console.log("Variant Map:", variantMap);
-    
-    if (variantMap[selectedSizeId]) {
-        variantIdInput.value = variantMap[selectedSizeId];
-        console.log("Updated Variant ID:", variantIdInput.value);
-    } else {
-        console.warn("No matching variant found for selected size!");
+        const sizeSelect = document.getElementById("size-select");
+        const selectedSizeId = sizeSelect.value;
+        const variantMap = JSON.parse(document.getElementById("variant-map").value);
+        const variantIdInput = document.getElementById("variant-id");
+        if (variantMap[selectedSizeId]) {
+            variantIdInput.value = variantMap[selectedSizeId];
+        }
     }
-}
 
-function updateFormAction() {
-    updateVariant(); // Ensure the variant ID updates
-    var form = document.getElementById("add-to-cart-form");
-    var variantId = document.getElementById("variant-id").value;
+    window.updateFormAction = function () {
+        updateVariant();
+        const form = document.getElementById("add-to-cart-form");
+        const variantId = document.getElementById("variant-id").value;
+        if (variantId) {
+            form.action = "/add_to_cart/" + variantId + "/";
+            return true;
+        } else {
+            alert("Please select a size before adding to cart.");
+            return false;
+        }
+    };
 
-    if (variantId) {
-        form.action = "/add_to_cart/" + variantId + "/";
-        console.log("Updated Form Action:", form.action);
-        return true; // Allow submission
-    } else {
-        alert("Please select a size before adding to cart.");
-        return false; // Prevent submission
-    }
-}
+    // Color Swatch Click
+    const colorSwatches = document.querySelectorAll(".color-swatch");
 
+    colorSwatches.forEach(swatch => {
+        swatch.addEventListener("click", function (e) {
+            e.preventDefault();
+            const variantId = this.getAttribute("data-variant-id");
+
+            fetch(`/get-variant-json/${variantId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert("Variant not found.");
+                        return;
+                    }
+
+                    const mainImgContainer = document.querySelector("#product-main-img");
+                    const thumbsContainer = document.querySelector("#product-imgs");
+                    mainImgContainer.innerHTML = '';
+                    thumbsContainer.innerHTML = '';
+
+                    if (data.images && data.images.length > 0) {
+                        data.images.forEach((imgUrl, index) => {
+                            const mainDiv = document.createElement("div");
+                            mainDiv.classList.add("product-preview");
+                            const mainImg = document.createElement("img");
+                            mainImg.src = imgUrl;
+                            mainImg.alt = `Product Image ${index + 1}`;
+                            mainDiv.appendChild(mainImg);
+                            mainImgContainer.appendChild(mainDiv);
+
+                            const thumbDiv = document.createElement("div");
+                            thumbDiv.classList.add("product-preview");
+                            const thumbImg = document.createElement("img");
+                            thumbImg.src = imgUrl;
+                            thumbImg.alt = `Thumbnail Image ${index + 1}`;
+                            thumbDiv.appendChild(thumbImg);
+                            thumbsContainer.appendChild(thumbDiv);
+                        });
+                    }
+
+                    // Re-initialize Slick
+                    if ($('#product-main-img').hasClass('slick-initialized')) {
+                        $('#product-main-img').slick('unslick');
+                    }
+                    if ($('#product-imgs').hasClass('slick-initialized')) {
+                        $('#product-imgs').slick('unslick');
+                    }
+
+                    $('#product-main-img').slick({
+                        infinite: true,
+                        speed: 300,
+                        dots: false,
+                        arrows: true,
+                        fade: true,
+                        asNavFor: '#product-imgs',
+                    });
+
+                    $('#product-imgs').slick({
+                        slidesToShow: 3,
+                        slidesToScroll: 1,
+                        arrows: true,
+                        centerMode: true,
+                        focusOnSelect: true,
+                        asNavFor: '#product-main-img',
+                    });
+
+                    // Update price
+                    const priceElement = document.querySelector(".product-price");
+                    if (data.discounted_price !== null) {
+                        priceElement.innerHTML = `
+                            <del class="old-price">₹${data.original_price.toFixed(2)}</del>
+                            <span class="discounted-price">₹${data.discounted_price.toFixed(2)}</span>
+                        `;
+                    } else {
+                        priceElement.innerHTML = `₹${data.original_price.toFixed(2)}`;
+                    }
+
+                    // Update stock
+                    const stockElement = document.querySelector(".stock-status");
+                    stockElement.textContent = data.in_stock
+                        ? `In Stock (${data.stock_quantity} available)`
+                        : "Out of Stock";
+
+                    // Update form
+                    document.getElementById("variant-id").value = data.variant_id;
+                    document.getElementById("add-to-cart-form").action = `/add_to_cart/${data.variant_id}/`;
+                })
+                .catch(error => {
+                    console.error("AJAX error:", error);
+                });
+        });
+    });
+});
 </script>
+
+
+{% endblock %}

@@ -35,6 +35,8 @@ urlpatterns = [
     path('products/add/', views.add_product, name='add_product'),
     path('products/edit/<int:pk>/', views.edit_product, name='edit_product'),
     path('products/delete/<int:pk>/', views.delete_product, name='delete_product'),
+    path('get-variant-json/<int:variant_id>/', views.get_variant_json, name='get_variant_json'),
+
 
     path('order_management/', views.order_management, name='order_management'),
     path('order/<int:order_id>/change_status/', views.change_order_status, name='change_order_status'), 
@@ -44,6 +46,9 @@ urlpatterns = [
     path('profile/edit/', views.edit_profile, name='edit_profile'),
     path('profile/address/', views.manage_address, name='manage_address'),
     path('profile/order/cancel/<int:order_id>/', views.user_cancel_order, name='user_cancel_order'),
+    path('check-cancel-status/', views.check_cancel_status, name='check_cancel_status'),
+
+
     path('profile/password/', views.change_password, name='change_password'),
     path('address/edit/<int:id>/', views.edit_address, name='edit_address'),
     path('address/delete/<int:id>/', views.delete_address, name='delete_address'),
@@ -63,7 +68,9 @@ urlpatterns = [
     path('cart/update/<int:cart_item_id>/', views.update_cart, name='update_cart'),
     path('cart/remove/<int:cart_item_id>/', views.remove_from_cart, name='remove_from_cart'),
 
+    path('ajax/save-address/', views.ajax_save_address, name='ajax_save_address'),
     path('checkout/', views.checkout, name='checkout'),
+    path("ajax/create-razorpay-order/", views.create_razorpay_order, name="create_razorpay_order"),
     path('place_order/', views.place_order, name='place_order'),
     path('order_summary/<int:order_id>/', views.order_summary, name='order_summary'),
     path("retry-payment/<int:order_id>/", views.retry_payment, name="retry_payment"),
@@ -81,15 +88,19 @@ urlpatterns = [
 
    # Offer Management URLs
     path('offers/', views.offer_list, name='offer_list'),
-    path('create/', views.create_offer, name='create_offer'),  # Create a new offer
+    path('create/', views.create_offer, name='create_offer'), 
+    path('offers/<int:offer_id>/edit/', views.edit_offer, name='edit_offer'),
     path("api/offers/", views.get_offers, name="get_offers"),
     path("api/referral-offers/", views.get_referral_offers, name="referral_offers_api"),
+    path("api/referral-claims/", views.get_referral_claims, name="get_referral_claims"),
     path("api/offers/<int:offer_id>/delete/", views.delete_offer, name="delete_offer"),
+    path("api/referral-offers/<int:offer_id>/delete/", views.delete_referral_offer, name="delete_referral_offer"),
     path('toggle/<int:offer_id>/', views.toggle_offer_status, name='toggle_offer_status'),  # Activate/deactivate offer
 
     # Coupon Management URLs
     path('coupons/', views.coupon_list, name='coupon_list'),  # List all coupons
     path('coupons/add/', views.add_coupon, name='add_coupon'), 
+    path('coupons/edit/<int:coupon_id>/', views.edit_coupon, name='edit_coupon'),
     path('delete/<int:coupon_id>/', views.delete_coupon, name='delete_coupon'),  # Delete a coupon
     path('validate/', views.validate_coupon, name='validate_coupon'),  # Validate and apply coupon
 

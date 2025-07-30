@@ -4,6 +4,15 @@
 <div class="coupon-container">
     <h2>Add New Coupon <i class="fa fa-gift"></i></h2>
 
+    {% if messages %}
+    <ul class="messages">
+        {% for message in messages %}
+        <li class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %}">
+            {{ message }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
 
     <form method="POST" id="coupon_form">
         {% csrf_token %}
@@ -13,9 +22,25 @@
 
         <div class="row">
             <div class="col-md-6">
-                <label for="discount_value">Discount Value (% or Fixed):</label>
-                <input type="number" id="discount_value" name="discount_value" placeholder="Enter discount" min="1" required>
+                <label for="discount_type">Discount Type:</label>
+                <select id="discount_type" name="discount_type" required>
+                    <option value="percentage" selected>Percentage (%)</option>
+                    <option value="fixed">Fixed Amount (₹)</option>
+                </select>
             </div>
+
+            <div class="col-md-6">
+                <label for="discount_value">Discount Value:</label>
+                <input type="number" id="discount_value" name="discount_value" placeholder="Enter discount value" min="1" required>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <label for="max_discount">Max Discount (for percentage type):</label>
+                <input type="number" id="max_discount" name="max_discount" placeholder="Optional Max Cap">
+            </div>
+
             <div class="col-md-6">
                 <label for="min_purchase">Minimum Purchase:</label>
                 <input type="number" id="min_purchase" name="min_purchase" placeholder="Enter minimum amount" min="0">
@@ -27,21 +52,22 @@
                 <label for="usage_limit">Total Usage Limit:</label>
                 <input type="number" id="usage_limit" name="usage_limit" placeholder="Total usage limit" min="1" required>
             </div>
+
             <div class="col-md-6">
                 <label for="per_user_limit">Usage Limit Per User:</label>
                 <input type="number" id="per_user_limit" name="per_user_limit" placeholder="Usage limit per user" min="1" required>
             </div>
-            <div class="col-md-6">
-                <label for="expiration_date">Expiration Date:</label>
-                <input type="datetime-local" id="expiration_date" name="expiration_date" required>
-            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="expiration_date">Expiration Date:</label>
+            <input type="datetime-local" id="expiration_date" name="expiration_date" min="{{ now|date:'Y-m-d\\TH:i' }}" required>
         </div>
 
         <button type="submit" class="submit-button">Create Coupon</button>
     </form>
 </div>
 
-<!-- Styles -->
 <style>
 .coupon-container {
     max-width: 600px;
@@ -78,7 +104,7 @@ label {
     margin-top: 10px;
 }
 
-input {
+input, select {
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 5px;
@@ -100,12 +126,15 @@ input {
     background: #218838;
 }
 
-/* Responsive Design */
 @media (max-width: 600px) {
     .row {
         flex-direction: column;
     }
 }
 </style>
-
-{% endblock %} 
+<script>
+document.getElementById('coupon_code').addEventListener('input', function () {
+    this.value = this.value.toUpperCase().trim();
+});
+</script>
+{% endblock %}

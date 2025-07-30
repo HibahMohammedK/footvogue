@@ -74,6 +74,9 @@ class Category(models.Model):
         self.category_name = self.category_name.lower()  # Convert to lowercase before saving
         super().save(*args, **kwargs)
 
+    def __str__(self):
+        return self.category_name
+
 class Product(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField()
@@ -84,6 +87,31 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+    
+    def get_best_offer(self):
+        now = timezone.now()
+        product_offer = Offer.objects.filter(
+            offer_type='product',
+            product=self,
+            is_active=True,
+            start_date__lte=now,
+            end_date__gte=now
+        ).first()
+
+        category_offer = Offer.objects.filter(
+            offer_type='category',
+            category=self.category,
+            is_active=True,
+            start_date__lte=now,
+            end_date__gte=now
+        ).order_by('-discount_value').first()
+
+        # Return whichever offer has the higher discount
+        return max(
+            filter(None, [product_offer, category_offer]),
+            key=lambda o: o.discount_value,
+            default=None
+        )
 
 class ProductImage(models.Model):
     variant = models.ForeignKey('ProductVariant', on_delete=models.CASCADE)
@@ -322,15 +350,22 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
+    STATUS_CHOICES = [
+        ('Active', 'Active'),
+        ('Cancelled', 'Cancelled'),
+    ]
+
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
     product_variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
-    price = models.DecimalField(max_digits=10, decimal_places=2,null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Active')
+    cancel_status = models.CharField(max_length=20, choices=[
+        ('Not Cancelled', 'Not Cancelled'),
+        ('Cancelled', 'Cancelled'),
+    ], default='Not Cancelled')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.quantity}x {self.product_variant.product.name} for Order #{self.order.id}"
     
     
 class Cart(models.Model):
@@ -516,6 +551,7 @@ class ReturnRequest(models.Model):
     reason = models.ForeignKey(ReturnReason, on_delete=models.SET_NULL, null=True, blank=True)
     additional_notes = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    refunded = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

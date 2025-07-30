@@ -102,47 +102,46 @@
 
                             <!-- Product Variants -->
                             <div class="product-options">
-                                <!-- Product Details Template -->
-                                <form method="post" action="{% url 'add_to_cart' 0 %}" id="add-to-cart-form">
+                                <form method="post" action="{% url 'add_to_cart' 0 %}" id="add-to-cart-form" onsubmit="return updateFormAction()">
                                     {% csrf_token %}
-                                    <label>
-                                        Size
-                                        <select class="input-select" name="size" id="size-select" onchange="updateVariant()">
-                                            <option value="">Select Size</option>
-                                            {% for size in unique_sizes %}
-                                                <option value="{{ size.id }}" {% if size.id == selected_variant.size.id %}selected{% endif %}>
-                                                    {{ size.size_name }} ({{ size.variant_count }})
-                                                </option>
-                                            {% endfor %}
-                                        </select>
-                                    </label>
-                                    <input type="hidden" name="variant_id" id="variant-id" value="{{ selected_variant.id }}">
-                                    <input type="hidden" id="variant-map" value='{{ variant_map|safe }}'>
-                                </form>
-                            </div>
-                            
 
-                         <!-- Add to Cart -->
-                            <div class="add-to-cart">
-                                <form action="{% url 'add_to_cart' selected_variant.id %}" method="POST">
-                                    {% csrf_token %}
-                                    
-                                    <!-- Quantity Input -->
-                                    <div class="qty-label">
-                                        Qty
-                                        <div class="input-number">
-                                            <input type="number" id="qty" name="quantity" value="1" min="1">
-                                            <span class="qty-up">+</span>
-                                            <span class="qty-down">-</span>
-                                        </div>
+                                    <!-- Product Options -->
+                                    <div class="product-options">
+                                        <label>
+                                            Size
+                                            <select class="input-select" name="size" id="size-select" onchange="updateVariant()">
+                                                <option value="">Select Size</option>
+                                                {% for size in unique_sizes %}
+                                                    <option value="{{ size.id }}" {% if size.id == selected_variant.size.id %}selected{% endif %}>
+                                                        {{ size.size_name }} ({{ size.variant_count }})
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                        </label>
+
+                                        <!-- Hidden Inputs -->
+                                        <input type="hidden" name="variant_id" id="variant-id" value="{{ selected_variant.id }}">
+                                        <input type="hidden" id="variant-map" value='{{ variant_map|safe }}'>
                                     </div>
 
-                                    <input type="hidden" name="variant_id" value="{{ selected_variant.id }}">
+                                    <!-- Add to Cart -->
+                                    <div class="add-to-cart">
+                                        <!-- Quantity Input -->
+                                        <div class="qty-label">
+                                            Qty
+                                            <div class="input-number">
+                                                <input type="number" id="qty" name="quantity" value="1" min="1">
+                                                <span class="qty-up">+</span>
+                                                <span class="qty-down">-</span>
+                                            </div>
+                                        </div>
 
-                                    <button type="submit" class="add-to-cart-btn"  onclick="return updateFormAction()">
-                                        <i class="fa fa-shopping-cart"></i> Add to Cart
-                                    </button>
+                                        <button type="submit" class="add-to-cart-btn">
+                                            <i class="fa fa-shopping-cart"></i> Add to Cart
+                                        </button>
+                                    </div>
                                 </form>
+
                             </div>
 
                             {% if best_offer %}
@@ -496,7 +495,7 @@
 			<!-- /container -->
 		</div>
 		<!-- /NEWSLETTER -->
-{% endblock %}
+
 
 <style>
     .offer-banner {
@@ -578,39 +577,35 @@
         });
     }); 
 
-    function updateVariant() {
-    var sizeSelect = document.getElementById("size-select");
-    var selectedSizeId = sizeSelect.value;
-    
-    var variantMapInput = document.getElementById("variant-map");
-    var variantMap = JSON.parse(variantMapInput.value);
-    
-    var variantIdInput = document.getElementById("variant-id");
+ function updateVariant() {
+    const sizeSelect = document.getElementById("size-select");
+    const selectedSizeId = sizeSelect.value;
 
-    console.log("Selected Size ID:", selectedSizeId);
-    console.log("Variant Map:", variantMap);
-    
+    const variantMapInput = document.getElementById("variant-map");
+    const variantMap = JSON.parse(variantMapInput.value);
+
+    const variantIdInput = document.getElementById("variant-id");
+
     if (variantMap[selectedSizeId]) {
         variantIdInput.value = variantMap[selectedSizeId];
-        console.log("Updated Variant ID:", variantIdInput.value);
+        return variantMap[selectedSizeId];  // return updated variant ID
     } else {
-        console.warn("No matching variant found for selected size!");
+        variantIdInput.value = "";
+        return null;
     }
 }
 
 function updateFormAction() {
-    updateVariant(); // Ensure the variant ID updates
-    var form = document.getElementById("add-to-cart-form");
-    var variantId = document.getElementById("variant-id").value;
+    const variantId = updateVariant();  // Get updated variant ID
+    const form = document.getElementById("add-to-cart-form");
 
     if (variantId) {
-        form.action = "/add_to_cart/" + variantId + "/";
-        console.log("Updated Form Action:", form.action);
-        return true; // Allow submission
+        form.action = `/add_to_cart/${variantId}/`;
+        return true;  // Proceed with submission
     } else {
         alert("Please select a size before adding to cart.");
-        return false; // Prevent submission
+        return false; // Block form submission
     }
 }
-
 </script>
+{% endblock %}

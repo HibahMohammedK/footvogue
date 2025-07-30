@@ -30,10 +30,7 @@
                 <div class="mb-3">
                     <label for="parent_category" class="form-label fw-bold">Parent Category</label>
                     <select id="parent_category" name="parent_category" class="form-control">
-                        <option value="">Select Parent Category</option>
-                        <option value="women">Women</option>
-                        <option value="men">Men</option>
-                        <option value="kids">Kids</option>
+                        <option value="">No Parent</option>
                         {% for category in categories %}
                             <option value="{{ category.id }}">{{ category.category_name }}</option>
                         {% endfor %}

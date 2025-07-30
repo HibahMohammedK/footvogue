@@ -57,7 +57,8 @@ def get_sales_analytics(timeframe_days=None, category_id=None):
 
     # Base query for successful orders
     base_query = OrderItem.objects.filter(
-        order__payment_status='Paid'
+        order__payment_status='Paid',
+        status='Active'  
     ).select_related('product_variant__product__category')
 
     # Apply timeframe filter if specified

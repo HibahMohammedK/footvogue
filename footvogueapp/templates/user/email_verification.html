@@ -6,28 +6,60 @@
         <div class="col-md-6">
             <div class="card shadow p-4">
                 <h3 class="text-center mb-4">Email Verification</h3>
+
+                <!-- 🔁 Timer Display Section -->
+                <div class="text-center mb-3">
+                    <strong>Time remaining:</strong> 
+                    <span id="timer" style="font-weight: bold; color: green;"></span><br>
+                    <small id="timer-message" style="color: red;"></small>
+                </div>
+
                 <form method="POST" action="">
                     {% csrf_token %}
                     <div class="form-group mb-3">
                         <label for="otp">Enter OTP</label>
                         <input type="text" name="otp" id="otp" class="form-control" required>
                     </div>
-                    <button type="submit" class="primary-btn order-submit btn-block">Verify Email</button>
+                    <button type="submit" class="primary-btn order-submit btn-block" id="submit-btn">Verify Email</button>
                 </form><br>
+
                 <form method="POST" action="{% url 'resend_otp' %}" class="mt-3 text-center">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-secondary">Resend OTP</button>
                 </form>
-                 <!-- Messages -->
-                 {% if messages %}
-                 <div class="mt-3 text-center">
-                     {% for message in messages %}
-                     <p style="color: red;">{{ message }}</p>
-                     {% endfor %}
-                 </div>
-                 {% endif %}
             </div>
         </div>
     </div>
 </div><br>
+
+<script>
+  // Use the actual remaining time passed from the view
+  let timeLeft = parseInt("{{ remaining_time|default:0 }}");
+
+  const timerDisplay = document.getElementById("timer");
+  const timerMessage = document.getElementById("timer-message");
+  const submitBtn = document.getElementById("submit-btn");
+
+  function updateTimer() {
+    if (timeLeft < 0) {
+      clearInterval(timerInterval);
+      timerDisplay.textContent = "00:00";
+      timerMessage.textContent = "OTP has expired. Please request a new one.";
+      if (submitBtn) submitBtn.disabled = true;
+      return;
+    }
+
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+
+    timerDisplay.textContent = 
+      `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+    timeLeft--;
+  }
+
+  // Initialize timer
+  updateTimer();
+  const timerInterval = setInterval(updateTimer, 1000);
+</script>
 {% endblock %}

@@ -4,20 +4,25 @@
   <div class="container-fluid mt-4">
     <h1 class="mb-4 text-center">Active Coupons</h1>
 
-    <!-- Search Bar and Add Coupon Button in a Single Section -->
     <div class="d-flex justify-content-between mb-4">
-      <!-- Search Bar -->
       <div class="w-75">
-        <input type="text" id="search-bar" class="form-control" placeholder="Search by Coupon Code or Discount" oninput="searchCoupons()" />
+        <input type="text" id="search-bar" class="form-control" placeholder="Search by Coupon Code" oninput="searchCoupons()" />
       </div>
-
-      <!-- Add Coupon Button -->
       <div>
         <a href="{% url 'add_coupon' %}" class="btn btn-success btn-sm">Add New Coupon</a>
       </div>
     </div>
+    
+    {% if messages %}
+    <ul class="messages">
+        {% for message in messages %}
+        <li class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %}">
+            {{ message }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
 
-    <!-- Coupon Table -->
     <div class="table-responsive">
       <table class="table table-striped table-bordered" id="coupon-table">
         <thead>
@@ -28,77 +33,72 @@
             <th>Expiration Date</th>
             <th>Usage Limit</th>
             <th>Used Count</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for coupon in coupons %}
-            <tr>
-              <td>{{ coupon.coupon_code }}</td>
-              <td>{{ coupon.discount_value }} {% if coupon.discount_type == 'percentage' %}%{% endif %}</td>
-              <td>{{ coupon.min_purchase }}</td>
-              <td>{{ coupon.expiration_date|date:"Y-m-d H:i:s" }}</td>
-              <td>{{ coupon.usage_limit }}</td>
-              <td>{{ coupon.used_count }}</td>
-            </tr>
+          <tr>
+            <td>{{ coupon.coupon_code }}</td>
+            <td>{{ coupon.discount_value }}{% if coupon.discount_type == 'percentage' %}%{% endif %}</td>
+            <td>{{ coupon.min_purchase }}</td>
+            <td>{{ coupon.expiration_date|date:"Y-m-d H:i:s" }}</td>
+            <td>{{ coupon.usage_limit }}</td>
+            <td>{{ coupon.used_count }}</td>
+            <td><a href="{% url 'edit_coupon' coupon.id %}" class="btn btn-primary btn-sm">Edit</a>
+            <!-- Delete Button -->
+            <form method="POST" action="{% url 'delete_coupon' coupon.id %}" style="display:inline;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this coupon?');">Delete</button>
+            </form></td>
+          </tr>
           {% endfor %}
         </tbody>
+
       </table>
     </div>
 
-    <!-- Button to trigger AJAX request for more coupons -->
-    <div class="text-center mt-4">
-      <button id="load-more" class="btn btn-primary btn-sm" onclick="loadCoupons()">Load More Coupons</button>
-    </div>
+    <!-- Pagination Controls -->
+    <nav aria-label="Coupon pagination">
+      <ul class="pagination justify-content-center">
+        {% if coupons.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ coupons.previous_page_number }}" aria-label="Previous">
+              &laquo; Previous
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled">
+            <span class="page-link">&laquo; Previous</span>
+          </li>
+        {% endif %}
+
+        <li class="page-item disabled">
+          <span class="page-link">Page {{ coupons.number }} of {{ coupons.paginator.num_pages }}</span>
+        </li>
+
+        {% if coupons.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ coupons.next_page_number }}" aria-label="Next">
+              Next &raquo;
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled">
+            <span class="page-link">Next &raquo;</span>
+          </li>
+        {% endif %}
+      </ul>
+    </nav>
   </div>
 
   <script>
-    let page = 1;  // Track the current page of coupons to load
-
-    // Function to fetch more coupons using AJAX
-    function loadCoupons() {
-      page += 1;  // Increment page number for next set of coupons
-
-      fetch(`/coupons/?page=${page}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .then(response => response.json())
-      .then(data => {
-        const tableBody = document.querySelector('#coupon-table tbody');
-        
-        data.coupons.forEach(coupon => {
-          const row = document.createElement('tr');
-          
-          row.innerHTML = `
-            <td>${coupon.coupon_code}</td>
-            <td>${coupon.discount_value} ${coupon.discount_type === 'percentage' ? '%' : ''}</td>
-            <td>${coupon.min_purchase}</td>
-            <td>${coupon.expiration_date}</td>
-            <td>${coupon.usage_limit}</td>
-            <td>${coupon.used_count}</td>
-          `;
-          
-          tableBody.appendChild(row);
-        });
-      })
-      .catch(error => {
-        console.error('Error loading coupons:', error);
-      });
-    }
-
-    // Search Coupons by Coupon Code or Discount
     function searchCoupons() {
-      const searchQuery = document.querySelector('#search-bar').value.toLowerCase();
-      const tableRows = document.querySelectorAll('#coupon-table tbody tr');
-
-      tableRows.forEach(row => {
-        const couponCode = row.cells[0].textContent.toLowerCase();
-        const discount = row.cells[1].textContent.toLowerCase();
-
-        // Check if the row matches the search query
-        if (couponCode.includes(searchQuery) || discount.includes(searchQuery)) {
+      const searchQuery = document.getElementById('search-bar').value.toLowerCase();
+      const rows = document.querySelectorAll('#coupon-table tbody tr');
+      rows.forEach(row => {
+        const code = row.cells[0].textContent.toLowerCase();
+        if (code.includes(searchQuery)) {
           row.style.display = '';
         } else {
           row.style.display = 'none';

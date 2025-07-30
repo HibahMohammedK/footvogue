@@ -37,9 +37,10 @@
                         <a href="{% url 'add_to_cart_from_wishlist' item.variant_id %}" class="btn btn-success btn-sm">
                             <i class="fas fa-shopping-cart"></i> Add to Cart
                         </a>
-                        <a href="{% url 'remove_from_wishlist' item.id %}" class="btn btn-danger btn-sm">
+                        <a href="{% url 'remove_from_wishlist' item.variant_id %}" class="btn btn-danger btn-sm confirm-delete">
                             <i class="fas fa-trash"></i> Remove
                         </a>
+
                     </td>
                 </tr>
                 {% empty %}

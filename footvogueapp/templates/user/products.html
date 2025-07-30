@@ -90,6 +90,28 @@
                 </form>
             </div>
             <!-- /ASIDE -->
+             
+<!-- section title -->
+<div class="col-md-9">
+    <div class="section-title">
+        <h3 class="title">Browse by Category</h3>
+        <div class="section-nav">
+            <ul class="section-tab-nav tab-nav">
+                <li class="{% if not request.GET.category %}active{% endif %}">
+                    <a href="{% url 'products' %}">All</a>
+                </li>
+               {% for cat in categories %}
+                    {% if not cat.parent_category %}
+                        <li class="{% if cat.id|stringformat:"s" == request.GET.category %}active{% endif %}">
+                            <a href="{% url 'products' %}?category={{ cat.id }}">{{ cat.category_name }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+<!-- /section title -->
 
             <!-- STORE -->
             <div id="store" class="col-md-9">
@@ -125,7 +147,16 @@
                                     </div>
                                 </a>
                                 <div class="add-to-cart">
-                                    <button class="add-to-cart-btn"><i class="fa fa-shopping-cart"></i> add to cart</button>
+                                    {% if product.default_variant %}
+                                        <form action="{% url 'add_to_cart' product.default_variant.id %}" method="POST">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="quantity" value="1">
+                                            <input type="hidden" name="variant_id" value="{{ product.default_variant.id }}">
+                                            <button type="submit" class="add-to-cart-btn">
+                                                <i class="fa fa-shopping-cart"></i> Add to Cart
+                                            </button>
+                                        </form>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
