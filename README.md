@@ -12,6 +12,7 @@ FootVogue is a full-featured e-commerce web application built using Django and P
 ✅ Referral System with automatic wallet credit
 
 🛒 Shopping Experience
+
 ✅ Advanced Search & Sorting (by price, rating, arrival, etc.)
 
 ✅ Full Cart Management (add/remove/update quantity)
